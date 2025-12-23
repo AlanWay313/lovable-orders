@@ -51,11 +51,12 @@ export default function DriverLogin() {
         return;
       }
 
-      // Send OTP via Supabase Auth
+      // Send OTP via Supabase Auth - redirect to driver area if magic link is clicked
       const { error } = await supabase.auth.signInWithOtp({
         email: email.toLowerCase().trim(),
         options: {
           shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/driver`,
         },
       });
 
@@ -111,6 +112,9 @@ export default function DriverLogin() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: email.toLowerCase().trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/driver`,
+        },
       });
 
       if (error) throw error;
