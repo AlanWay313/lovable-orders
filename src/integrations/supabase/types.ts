@@ -136,6 +136,65 @@ export type Database = {
         }
         Relationships: []
       }
+      coupons: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          current_uses: number | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          min_order_value: number | null
+          starts_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          current_uses?: number | null
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_order_value?: number | null
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          current_uses?: number | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_order_value?: number | null
+          starts_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_addresses: {
         Row: {
           city: string
@@ -324,6 +383,7 @@ export type Database = {
       orders: {
         Row: {
           company_id: string
+          coupon_id: string | null
           created_at: string
           customer_email: string | null
           customer_id: string | null
@@ -333,6 +393,7 @@ export type Database = {
           delivery_address_id: string | null
           delivery_driver_id: string | null
           delivery_fee: number
+          discount_amount: number | null
           estimated_delivery_time: string | null
           id: string
           notes: string | null
@@ -346,6 +407,7 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          coupon_id?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -355,6 +417,7 @@ export type Database = {
           delivery_address_id?: string | null
           delivery_driver_id?: string | null
           delivery_fee?: number
+          discount_amount?: number | null
           estimated_delivery_time?: string | null
           id?: string
           notes?: string | null
@@ -368,6 +431,7 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          coupon_id?: string | null
           created_at?: string
           customer_email?: string | null
           customer_id?: string | null
@@ -377,6 +441,7 @@ export type Database = {
           delivery_address_id?: string | null
           delivery_driver_id?: string | null
           delivery_fee?: number
+          discount_amount?: number | null
           estimated_delivery_time?: string | null
           id?: string
           notes?: string | null
@@ -394,6 +459,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
             referencedColumns: ["id"]
           },
           {

@@ -14,6 +14,9 @@ import StoreSettings from "./pages/store/StoreSettings";
 import MenuManagement from "./pages/store/MenuManagement";
 import OrdersManagement from "./pages/store/OrdersManagement";
 import DriversManagement from "./pages/store/DriversManagement";
+import CouponsManagement from "./pages/store/CouponsManagement";
+import UserSettings from "./pages/store/UserSettings";
+import OrderTracking from "./pages/OrderTracking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +32,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/menu/:slug" element={<PublicMenu />} />
+            <Route path="/track/:orderId" element={<OrderTracking />} />
             <Route
               path="/dashboard"
               element={
@@ -66,6 +70,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DriversManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/coupons"
+              element={
+                <ProtectedRoute>
+                  <CouponsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/settings"
+              element={
+                <ProtectedRoute>
+                  <UserSettings />
                 </ProtectedRoute>
               }
             />

@@ -73,6 +73,12 @@ interface RecentOrder {
   status: string;
 }
 
+interface TopProduct {
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
 interface FullOrderData {
   id: string;
   created_at: string;
@@ -142,6 +148,7 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [statusData, setStatusData] = useState<OrderStatusData[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -276,6 +283,35 @@ export default function Dashboard() {
 
       // Recent orders
       setRecentOrders(allOrders.slice(0, 5));
+
+      // Top products - fetch order items for the period
+      const orderIds = ordersPeriod.map(o => o.id);
+      if (orderIds.length > 0) {
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('product_name, quantity, total_price')
+          .in('order_id', orderIds);
+
+        if (orderItems) {
+          const productMap = new Map<string, { quantity: number; revenue: number }>();
+          orderItems.forEach(item => {
+            const existing = productMap.get(item.product_name) || { quantity: 0, revenue: 0 };
+            productMap.set(item.product_name, {
+              quantity: existing.quantity + item.quantity,
+              revenue: existing.revenue + item.total_price,
+            });
+          });
+          
+          const sortedProducts = Array.from(productMap.entries())
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => b.quantity - a.quantity)
+            .slice(0, 5);
+          
+          setTopProducts(sortedProducts);
+        }
+      } else {
+        setTopProducts([]);
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -596,6 +632,31 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Top Products */}
+            {topProducts.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-display">Produtos Mais Vendidos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {topProducts.map((product, index) => (
+                      <div key={product.name} className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{product.name}</p>
+                          <p className="text-sm text-muted-foreground">{product.quantity} vendidos</p>
+                        </div>
+                        <span className="text-sm font-medium">{formatCurrency(product.revenue)}</span>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
