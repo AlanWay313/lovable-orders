@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrderNotifications } from '@/hooks/useOrderNotifications';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -53,6 +54,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut, hasRole, roles } = useAuth();
+  
+  // Enable real-time order notifications
+  useOrderNotifications();
 
   const handleSignOut = async () => {
     await signOut();
