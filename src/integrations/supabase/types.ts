@@ -559,35 +559,101 @@ export type Database = {
           },
         ]
       }
+      product_option_groups: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_required: boolean | null
+          max_selections: number | null
+          min_selections: number | null
+          name: string
+          product_id: string
+          selection_type: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_required?: boolean | null
+          max_selections?: number | null
+          min_selections?: number | null
+          name: string
+          product_id: string
+          selection_type?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_required?: boolean | null
+          max_selections?: number | null
+          min_selections?: number | null
+          name?: string
+          product_id?: string
+          selection_type?: string | null
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_option_groups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_options: {
         Row: {
           created_at: string
+          description: string | null
+          group_id: string | null
           id: string
+          is_available: boolean | null
           is_required: boolean | null
           max_selections: number | null
           name: string
           price_modifier: number | null
           product_id: string
+          sort_order: number | null
         }
         Insert: {
           created_at?: string
+          description?: string | null
+          group_id?: string | null
           id?: string
+          is_available?: boolean | null
           is_required?: boolean | null
           max_selections?: number | null
           name: string
           price_modifier?: number | null
           product_id: string
+          sort_order?: number | null
         }
         Update: {
           created_at?: string
+          description?: string | null
+          group_id?: string | null
           id?: string
+          is_available?: boolean | null
           is_required?: boolean | null
           max_selections?: number | null
           name?: string
           price_modifier?: number | null
           product_id?: string
+          sort_order?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "product_options_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "product_option_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "product_options_product_id_fkey"
             columns: ["product_id"]
