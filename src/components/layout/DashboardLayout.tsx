@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   { label: "Entregas", href: "/dashboard/deliveries", icon: Truck, roles: ["store_owner", "delivery_driver"] },
   { label: "Entregadores", href: "/dashboard/drivers", icon: Users, roles: ["store_owner"] },
   { label: "Cupons", href: "/dashboard/coupons", icon: Ticket, roles: ["store_owner"] },
-  { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["store_owner"] },
+  { label: "Empresas", href: "/dashboard/companies", icon: Store },
   { label: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
 
