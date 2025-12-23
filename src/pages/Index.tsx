@@ -96,7 +96,7 @@ const pricingPlans = [
 ];
 
 export default function Index() {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
 
@@ -143,8 +143,8 @@ export default function Index() {
           <div className="flex items-center gap-3">
             {user ? (
               <Button asChild>
-                <Link to="/dashboard">
-                  Dashboard
+                <Link to={hasRole('delivery_driver') && !hasRole('store_owner') && !hasRole('super_admin') ? '/driver' : '/dashboard'}>
+                  {hasRole('delivery_driver') && !hasRole('store_owner') && !hasRole('super_admin') ? 'Área do Entregador' : 'Dashboard'}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

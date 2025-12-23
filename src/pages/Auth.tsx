@@ -6,14 +6,24 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function Auth() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const { user, loading } = useAuth();
+  const { user, loading, hasRole } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading && user) {
-      navigate('/');
+      // Check user role and redirect accordingly
+      const isDriver = hasRole('delivery_driver');
+      const isStoreOwner = hasRole('store_owner');
+      const isSuperAdmin = hasRole('super_admin');
+      
+      // If user is ONLY a driver (not store owner or admin), redirect to driver area
+      if (isDriver && !isStoreOwner && !isSuperAdmin) {
+        navigate('/driver');
+      } else {
+        navigate('/dashboard');
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, hasRole, navigate]);
 
   if (loading) {
     return (
