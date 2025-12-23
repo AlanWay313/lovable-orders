@@ -12,6 +12,7 @@ import PublicMenu from "./pages/PublicMenu";
 import AdminCompanies from "./pages/admin/AdminCompanies";
 import StoreSettings from "./pages/store/StoreSettings";
 import MenuManagement from "./pages/store/MenuManagement";
+import OrdersManagement from "./pages/store/OrdersManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <MenuManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/orders"
+              element={
+                <ProtectedRoute>
+                  <OrdersManagement />
                 </ProtectedRoute>
               }
             />
