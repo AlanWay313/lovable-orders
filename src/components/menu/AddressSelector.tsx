@@ -22,35 +22,62 @@ interface Address {
 }
 
 interface AddressSelectorProps {
-  userId: string | null;
+  customerId: string;
   selectedAddressId: string | null;
   onSelect: (address: Address | null) => void;
   onAddNew: () => void;
 }
 
-export function AddressSelector({ userId, selectedAddressId, onSelect, onAddNew }: AddressSelectorProps) {
+export function AddressSelector({ customerId, selectedAddressId, onSelect, onAddNew }: AddressSelectorProps) {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId) {
+    if (customerId) {
       loadAddresses();
     } else {
       setAddresses([]);
       setLoading(false);
     }
-  }, [userId]);
+  }, [customerId]);
 
   const loadAddresses = async () => {
-    if (!userId) return;
+    if (!customerId) return;
     
     setLoading(true);
     try {
+      // First get customer email to find their orders' addresses
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('email, phone')
+        .eq('id', customerId)
+        .single();
+      
+      if (!customer) {
+        setAddresses([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get addresses from orders made by this customer (by email)
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('delivery_address_id')
+        .eq('customer_email', customer.email)
+        .not('delivery_address_id', 'is', null);
+
+      if (!orders || orders.length === 0) {
+        setAddresses([]);
+        setLoading(false);
+        return;
+      }
+
+      const addressIds = [...new Set(orders.map(o => o.delivery_address_id).filter(Boolean))];
+      
       const { data, error } = await supabase
         .from('customer_addresses')
         .select('*')
-        .eq('user_id', userId)
-        .order('is_default', { ascending: false })
+        .in('id', addressIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

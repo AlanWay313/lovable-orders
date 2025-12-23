@@ -31,7 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCart';
 import { supabase } from '@/integrations/supabase/client';
-import { CustomerAuthModal } from './CustomerAuthModal';
+import { CustomerAuthModal, CustomerData } from './CustomerAuthModal';
 import { AddressSelector } from './AddressSelector';
 
 interface ViaCepResponse {
@@ -109,9 +109,8 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
   const { items, subtotal, clearCart } = useCart();
   const { toast } = useToast();
   
-  // Auth state
-  const [authUser, setAuthUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  // Customer state (not auth - just lookup)
+  const [loggedCustomer, setLoggedCustomer] = useState<CustomerData | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   // Address state
@@ -149,41 +148,26 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
   const paymentMethod = watch('paymentMethod');
   const zipCode = watch('zipCode');
 
-  // Check auth on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setAuthUser(user);
-      
-      if (user) {
-        // Load user profile data
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, phone')
-          .eq('id', user.id)
-          .maybeSingle();
-        
-        if (profile) {
-          setValue('customerName', profile.full_name || '');
-          setValue('customerPhone', profile.phone || '');
-        }
-        setValue('customerEmail', user.email || '');
-      }
-      
-      setAuthLoading(false);
-    };
-    
-    checkAuth();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setAuthUser(session?.user || null);
-      if (session?.user) {
-        setValue('customerEmail', session.user.email || '');
-      }
+  // When customer logs in via lookup, prefill form
+  const handleCustomerLogin = (customer: CustomerData) => {
+    setLoggedCustomer(customer);
+    setValue('customerName', customer.name);
+    setValue('customerPhone', customer.phone);
+    if (customer.email) {
+      setValue('customerEmail', customer.email);
+    }
+  };
+
+  const handleCustomerLogout = () => {
+    setLoggedCustomer(null);
+    setSelectedAddress(null);
+    setShowAddressForm(false);
+    reset({
+      paymentMethod: 'pix',
+      addressLabel: 'Casa',
     });
-    
-    return () => subscription.unsubscribe();
-  }, [setValue]);
+    toast({ title: 'Você saiu da sua conta' });
+  };
 
   // When address is selected, optionally show form if "new"
   useEffect(() => {
@@ -318,17 +302,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
     setCouponError(null);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setAuthUser(null);
-    setSelectedAddress(null);
-    setShowAddressForm(false);
-    reset({
-      paymentMethod: 'pix',
-      addressLabel: 'Casa',
-    });
-    toast({ title: 'Você saiu da sua conta' });
-  };
+  // Remove old handleLogout - replaced by handleCustomerLogout above
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (!isStoreOpen) {
@@ -351,19 +325,17 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
     setLoading(true);
     try {
-      const { data: authUserData } = await supabase.auth.getUser();
-      const authUserId = authUserData.user?.id ?? null;
-      const isAuthenticatedCheckout = Boolean(authUserId);
+      const isLoggedIn = !!loggedCustomer;
 
       let addressId = selectedAddress?.id;
 
       // If using a new address or guest checkout, create address
-      if (showAddressForm || !authUserId || !selectedAddress) {
+      if (showAddressForm || !isLoggedIn || !selectedAddress) {
         const { data: addressData, error: addressError } = await supabase
           .from('customer_addresses')
           .insert({
-            user_id: authUserId,
-            session_id: isAuthenticatedCheckout ? null : `guest-${crypto.randomUUID()}`,
+            user_id: null, // We don't use auth users for customer addresses
+            session_id: `guest-${crypto.randomUUID()}`,
             street: data.street,
             number: data.number,
             complement: data.complement || null,
@@ -373,7 +345,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
             zip_code: data.zipCode,
             reference: data.reference || null,
             label: data.addressLabel || 'Casa',
-            is_default: !selectedAddress, // Make default if first address
+            is_default: !selectedAddress,
           })
           .select()
           .single();
@@ -382,15 +354,37 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         addressId = addressData.id;
       }
 
-      // Create or update customer record for guests
-      if (!authUserId && data.customerEmail) {
-        await supabase.from('customers').upsert({
-          name: data.customerName,
-          email: data.customerEmail,
-          phone: data.customerPhone,
-        }, {
-          onConflict: 'email',
-        }).select().maybeSingle();
+      // Create or update customer record
+      let customerId: string | null = loggedCustomer?.id || null;
+      
+      if (!customerId && (data.customerEmail || data.customerPhone)) {
+        const cleanPhone = data.customerPhone.replace(/\D/g, '');
+        
+        // Try to find existing customer by email or phone
+        const { data: existingCustomer } = await supabase
+          .from('customers')
+          .select('id')
+          .or(`email.eq.${data.customerEmail?.toLowerCase()},phone.eq.${cleanPhone}`)
+          .maybeSingle();
+
+        if (existingCustomer) {
+          customerId = existingCustomer.id;
+        } else {
+          // Create new customer
+          const { data: newCustomer } = await supabase
+            .from('customers')
+            .insert({
+              name: data.customerName,
+              email: data.customerEmail?.toLowerCase() || null,
+              phone: cleanPhone,
+            })
+            .select()
+            .single();
+          
+          if (newCustomer) {
+            customerId = newCustomer.id;
+          }
+        }
       }
 
       // Create order
@@ -398,7 +392,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         .from('orders')
         .insert({
           company_id: companyId,
-          customer_id: authUserId,
+          customer_id: null, // We don't link to auth users
           customer_name: data.customerName,
           customer_phone: data.customerPhone,
           customer_email: data.customerEmail || null,
@@ -540,13 +534,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
     );
   }
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Removed authLoading check - no longer needed
 
   return (
     <div className="min-h-screen bg-background">
@@ -573,18 +561,18 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
         {/* Login/Account Section */}
         <section className="bg-card rounded-xl border border-border p-6 mb-6">
-          {authUser ? (
+          {loggedCustomer ? (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium">{authUser.user_metadata?.full_name || authUser.email}</p>
-                  <p className="text-sm text-muted-foreground">{authUser.email}</p>
+                  <p className="font-medium">{loggedCustomer.name}</p>
+                  <p className="text-sm text-muted-foreground">{loggedCustomer.email || loggedCustomer.phone}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <Button variant="ghost" size="sm" onClick={handleCustomerLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sair
               </Button>
@@ -592,7 +580,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
           ) : (
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Já tem cadastro?</p>
+                <p className="font-medium">Já fez pedido antes?</p>
                 <p className="text-sm text-muted-foreground">
                   Entre para usar seus endereços salvos
                 </p>
@@ -640,7 +628,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
                 )}
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="customerEmail">Email {authUser ? '' : '(para receber atualizações)'}</Label>
+                <Label htmlFor="customerEmail">Email {loggedCustomer ? '' : '(para acompanhar pedidos)'}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -649,7 +637,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
                     placeholder="seu@email.com"
                     className="pl-10"
                     {...register('customerEmail')}
-                    disabled={!!authUser}
+                    disabled={!!loggedCustomer?.email}
                   />
                 </div>
               </div>
@@ -663,10 +651,10 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
               Endereço de Entrega
             </h2>
 
-            {/* Show address selector for logged in users */}
-            {authUser && !showAddressForm && (
+            {/* Show address selector for logged in customers */}
+            {loggedCustomer && !showAddressForm && (
               <AddressSelector
-                userId={authUser.id}
+                customerId={loggedCustomer.id}
                 selectedAddressId={selectedAddress?.id || null}
                 onSelect={setSelectedAddress}
                 onAddNew={() => {
@@ -677,9 +665,9 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
             )}
 
             {/* Show address form for guests or when adding new */}
-            {(!authUser || showAddressForm) && (
+            {(!loggedCustomer || showAddressForm) && (
               <div className="space-y-4">
-                {authUser && showAddressForm && (
+                {loggedCustomer && showAddressForm && (
                   <div className="flex items-center justify-between pb-4 border-b border-border">
                     <span className="font-medium">Novo Endereço</span>
                     <Button
@@ -1054,9 +1042,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
       <CustomerAuthModal
         open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onSuccess={() => {
-          // Reload will happen via auth state change
-        }}
+        onSuccess={handleCustomerLogin}
       />
     </div>
   );
