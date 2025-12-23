@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Store,
@@ -8,9 +9,23 @@ import {
   Shield,
   ArrowRight,
   Check,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  logo_url: string | null;
+  city: string | null;
+  is_open: boolean;
+}
 
 const features = [
   {
@@ -82,6 +97,29 @@ const pricingPlans = [
 
 export default function Index() {
   const { user } = useAuth();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+
+  useEffect(() => {
+    loadCompanies();
+  }, []);
+
+  const loadCompanies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id, name, slug, description, logo_url, city, is_open')
+        .eq('status', 'approved')
+        .limit(6);
+
+      if (error) throw error;
+      setCompanies(data || []);
+    } catch (error) {
+      console.error('Error loading companies:', error);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,6 +199,83 @@ export default function Index() {
           </div>
         </div>
       </section>
+
+      {/* Companies Section */}
+      {(loadingCompanies || companies.length > 0) && (
+        <section id="restaurants" className="py-24 bg-secondary/30">
+          <div className="container">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold font-display sm:text-4xl">
+                Peça agora
+              </h2>
+              <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">
+                Explore os restaurantes parceiros e faça seu pedido
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {loadingCompanies ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="p-6 rounded-2xl bg-card border border-border">
+                    <div className="flex gap-4">
+                      <Skeleton className="w-16 h-16 rounded-xl" />
+                      <div className="flex-1">
+                        <Skeleton className="h-5 w-32 mb-2" />
+                        <Skeleton className="h-4 w-48" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                companies.map((company) => (
+                  <Link
+                    key={company.id}
+                    to={`/menu/${company.slug}`}
+                    className="group p-6 rounded-2xl bg-card border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300"
+                  >
+                    <div className="flex gap-4">
+                      {company.logo_url ? (
+                        <img
+                          src={company.logo_url}
+                          alt={company.name}
+                          className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-xl gradient-primary flex items-center justify-center flex-shrink-0">
+                          <Store className="h-8 w-8 text-primary-foreground" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold font-display truncate group-hover:text-primary transition-colors">
+                            {company.name}
+                          </h3>
+                          <Badge
+                            variant={company.is_open ? 'default' : 'secondary'}
+                            className={company.is_open ? 'bg-success text-success-foreground text-xs' : 'text-xs'}
+                          >
+                            {company.is_open ? 'Aberto' : 'Fechado'}
+                          </Badge>
+                        </div>
+                        {company.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-1">
+                            {company.description}
+                          </p>
+                        )}
+                        {company.city && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                            <MapPin className="h-3 w-3" />
+                            {company.city}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Features */}
       <section id="features" className="py-24 bg-secondary/30">
