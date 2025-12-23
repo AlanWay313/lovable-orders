@@ -177,6 +177,12 @@ export default function DriverLogin() {
             </form>
           ) : (
             <div className="space-y-6">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs text-muted-foreground text-center">
+                  📧 Verifique sua <strong>caixa de entrada</strong> e também a pasta de <strong>spam/lixo eletrônico</strong>
+                </p>
+              </div>
+
               <div className="flex justify-center">
                 <InputOTP
                   maxLength={6}

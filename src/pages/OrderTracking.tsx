@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Package,
@@ -61,6 +61,9 @@ const statusConfig: Record<string, { label: string; icon: typeof Package; color:
 
 const statusSteps = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
+// Notification sound URL
+const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+
 export default function OrderTracking() {
   const { orderId } = useParams<{ orderId: string }>();
   const [loading, setLoading] = useState(true);
@@ -68,6 +71,29 @@ export default function OrderTracking() {
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize audio element
+  useEffect(() => {
+    audioRef.current = new Audio(NOTIFICATION_SOUND_URL);
+    audioRef.current.volume = 0.6;
+    
+    return () => {
+      if (audioRef.current) {
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch((err) => {
+        console.log('Could not play notification sound:', err);
+      });
+    }
+  }, []);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -135,6 +161,10 @@ export default function OrderTracking() {
           if (newStatus !== oldStatus) {
             const statusInfo = statusConfig[newStatus];
             if (statusInfo) {
+              // Play notification sound
+              playNotificationSound();
+              
+              // Show toast notification
               toast.info(`Status atualizado: ${statusInfo.label}`, {
                 icon: <statusInfo.icon className="h-4 w-4" style={{ color: statusInfo.color }} />,
                 duration: 5000,
