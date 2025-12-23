@@ -36,16 +36,18 @@ interface NavItem {
   roles?: string[];
 }
 
+// Role hierarchy: super_admin > store_owner > delivery_driver
+// Higher roles can see everything below them
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Minha Loja", href: "/dashboard/store", icon: Store },
-  { label: "Cardápio", href: "/dashboard/menu", icon: UtensilsCrossed },
+  { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["super_admin"] },
+  { label: "Minha Loja", href: "/dashboard/store", icon: Store, roles: ["store_owner"] },
+  { label: "Cardápio", href: "/dashboard/menu", icon: UtensilsCrossed, roles: ["store_owner"] },
   { label: "Pedidos", href: "/dashboard/orders", icon: ShoppingBag, roles: ["store_owner", "delivery_driver"] },
   { label: "Entregas", href: "/dashboard/deliveries", icon: Truck, roles: ["store_owner", "delivery_driver"] },
   { label: "Entregadores", href: "/dashboard/drivers", icon: Users, roles: ["store_owner"] },
   { label: "Cupons", href: "/dashboard/coupons", icon: Ticket, roles: ["store_owner"] },
   { label: "Planos", href: "/dashboard/plans", icon: Crown, roles: ["store_owner"] },
-  { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["super_admin"] },
   { label: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -67,8 +69,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     navigate("/auth");
   };
 
+  // super_admin sees ALL items (hierarchy)
+  const isSuperAdmin = hasRole('super_admin');
+  
   const filteredNavItems = navItems.filter((item) => {
     if (!item.roles) return true;
+    if (isSuperAdmin) return true; // super_admin sees everything
     return item.roles.some((role) => hasRole(role as any));
   });
 
