@@ -250,12 +250,18 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
     setLoading(true);
     try {
+      // Resolve the current auth user directly from the auth session.
+      // This avoids cases where `useAuth()` hasn't hydrated yet but requests are still made as `authenticated`.
+      const { data: authUserData } = await supabase.auth.getUser();
+      const authUserId = authUserData.user?.id ?? null;
+      const isAuthenticatedCheckout = Boolean(authUserId);
+
       // 1. Create address
       const { data: addressData, error: addressError } = await supabase
         .from('customer_addresses')
         .insert({
-          user_id: user?.id || null,
-          session_id: user ? null : `guest-${Date.now()}`,
+          user_id: authUserId,
+          session_id: isAuthenticatedCheckout ? null : `guest-${crypto.randomUUID()}`,
           street: data.street,
           number: data.number,
           complement: data.complement || null,
@@ -275,7 +281,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         .from('orders')
         .insert({
           company_id: companyId,
-          customer_id: user?.id || null,
+          customer_id: authUserId,
           customer_name: data.customerName,
           customer_phone: data.customerPhone,
           customer_email: data.customerEmail || null,
