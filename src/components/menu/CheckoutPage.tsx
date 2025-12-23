@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,6 +14,7 @@ import {
   Smartphone,
   Loader2,
   Check,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+
+interface ViaCepResponse {
+  cep: string;
+  logradouro: string;
+  complemento: string;
+  bairro: string;
+  localidade: string;
+  uf: string;
+  erro?: boolean;
+}
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Nome é obrigatório'),
@@ -56,6 +67,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
   const { items, subtotal, clearCart } = useCart();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
 
@@ -73,7 +85,57 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
   });
 
   const paymentMethod = watch('paymentMethod');
+  const zipCode = watch('zipCode');
   const total = subtotal + deliveryFee;
+
+  const searchCep = useCallback(async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+
+    setLoadingCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data: ViaCepResponse = await response.json();
+
+      if (data.erro) {
+        toast({
+          title: 'CEP não encontrado',
+          description: 'Verifique o CEP e tente novamente',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setValue('street', data.logradouro || '');
+      setValue('neighborhood', data.bairro || '');
+      setValue('city', data.localidade || '');
+      setValue('state', data.uf || '');
+      if (data.complemento) {
+        setValue('complement', data.complemento);
+      }
+
+      toast({
+        title: 'Endereço encontrado',
+        description: `${data.logradouro}, ${data.bairro} - ${data.localidade}/${data.uf}`,
+      });
+    } catch (error) {
+      console.error('Error fetching CEP:', error);
+      toast({
+        title: 'Erro ao buscar CEP',
+        description: 'Tente novamente ou preencha manualmente',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingCep(false);
+    }
+  }, [setValue, toast]);
+
+  const handleCepBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const cep = e.target.value;
+    if (cep.replace(/\D/g, '').length === 8) {
+      searchCep(cep);
+    }
+  };
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (items.length === 0) {
@@ -275,11 +337,28 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="zipCode">CEP *</Label>
-                <Input
-                  id="zipCode"
-                  placeholder="00000-000"
-                  {...register('zipCode')}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="zipCode"
+                    placeholder="00000-000"
+                    {...register('zipCode')}
+                    onBlur={handleCepBlur}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => searchCep(zipCode || '')}
+                    disabled={loadingCep}
+                  >
+                    {loadingCep ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
                 {errors.zipCode && (
                   <p className="text-sm text-destructive">{errors.zipCode.message}</p>
                 )}
