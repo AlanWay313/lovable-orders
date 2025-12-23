@@ -148,6 +148,23 @@ function PublicMenuContent() {
   // Featured products
   const featuredProducts = products.filter((p) => p.is_featured);
 
+  // Get beverages for suggestions (look for category with "bebida" in name)
+  const beverageCategory = categories.find(c => 
+    c.name.toLowerCase().includes('bebida') || 
+    c.name.toLowerCase().includes('drink') ||
+    c.name.toLowerCase().includes('refrigerante') ||
+    c.name.toLowerCase().includes('suco')
+  );
+  
+  const suggestedBeverages = beverageCategory 
+    ? products.filter(p => p.category_id === beverageCategory.id).slice(0, 5)
+    : products.filter(p => 
+        p.name.toLowerCase().includes('refrigerante') ||
+        p.name.toLowerCase().includes('suco') ||
+        p.name.toLowerCase().includes('água') ||
+        p.name.toLowerCase().includes('bebida')
+      ).slice(0, 5);
+
   if (loading) {
     return <MenuSkeleton />;
   }
@@ -176,6 +193,7 @@ function PublicMenuContent() {
         companyName={company.name}
         deliveryFee={Number(company.delivery_fee) || 0}
         onBack={() => setCheckoutMode(false)}
+        isStoreOpen={company.is_open}
       />
     );
   }
@@ -257,6 +275,17 @@ function PublicMenuContent() {
           </div>
         </div>
       </div>
+
+      {/* Closed Store Warning */}
+      {!company.is_open && (
+        <div className="container mt-4">
+          <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
+            <p className="text-sm text-destructive font-medium">
+              Esta loja está fechada no momento. Você pode ver o cardápio, mas não pode fazer pedidos.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="container mt-6">
@@ -396,7 +425,15 @@ function PublicMenuContent() {
           setCartOpen(false);
           setCheckoutMode(true);
         }}
+        onContinueShopping={() => setCartOpen(false)}
         deliveryFee={Number(company.delivery_fee) || 0}
+        suggestedProducts={suggestedBeverages.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price),
+          image_url: p.image_url
+        }))}
+        isStoreOpen={company.is_open}
       />
     </div>
   );
@@ -426,6 +463,11 @@ function ProductCard({
         {product.description && (
           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {product.description}
+          </p>
+        )}
+        {product.product_options && product.product_options.length > 0 && (
+          <p className="text-xs text-primary mt-1">
+            +{product.product_options.length} adicionais disponíveis
           </p>
         )}
         <p className="text-lg font-bold text-primary mt-2">

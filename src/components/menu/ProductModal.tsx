@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Minus, Plus, X, Trash2 } from 'lucide-react';
+import { Minus, Plus, X, Trash2, ArrowLeft, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -104,15 +104,16 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         {/* Options */}
         {product.product_options && product.product_options.length > 0 && (
           <div className="space-y-3">
-            <h4 className="font-medium">Opcionais</h4>
+            <h4 className="font-medium">Adicionais</h4>
             {product.product_options.map((option) => (
               <div
                 key={option.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border"
+                className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Checkbox
                     id={option.id}
+                    checked={selectedOptions.some(o => o.name === option.name)}
                     onCheckedChange={(checked) =>
                       handleOptionToggle(option, checked as boolean)
                     }
@@ -125,7 +126,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
                   </Label>
                 </div>
                 {option.price_modifier > 0 && (
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm font-medium text-primary">
                     +R$ {option.price_modifier.toFixed(2)}
                   </span>
                 )}
@@ -180,18 +181,89 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
   );
 }
 
+// Suggested Products (Beverages)
+interface SuggestedProduct {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+}
+
+interface SuggestedProductsProps {
+  products: SuggestedProduct[];
+  onAdd: (product: SuggestedProduct) => void;
+}
+
+export function SuggestedProducts({ products, onAdd }: SuggestedProductsProps) {
+  if (products.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <Coffee className="h-4 w-4" />
+        <span>Sugestões para você</span>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+        {products.map((product) => (
+          <button
+            key={product.id}
+            onClick={() => onAdd(product)}
+            className="flex-shrink-0 flex flex-col items-center gap-2 p-3 rounded-xl border border-border hover:border-primary/50 hover:shadow-md transition-all bg-card min-w-[100px]"
+          >
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="w-12 h-12 rounded-lg object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                <Coffee className="h-6 w-6 text-muted-foreground" />
+              </div>
+            )}
+            <span className="text-xs font-medium text-center line-clamp-2">{product.name}</span>
+            <span className="text-xs text-primary font-bold">+R$ {product.price.toFixed(2)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Cart Drawer Component
 interface CartDrawerProps {
   open: boolean;
   onClose: () => void;
   onCheckout: () => void;
+  onContinueShopping: () => void;
   deliveryFee: number;
+  suggestedProducts?: SuggestedProduct[];
+  isStoreOpen: boolean;
 }
 
-export function CartDrawer({ open, onClose, onCheckout, deliveryFee }: CartDrawerProps) {
-  const { items, removeItem, updateQuantity, subtotal, clearCart } = useCart();
+export function CartDrawer({ 
+  open, 
+  onClose, 
+  onCheckout, 
+  onContinueShopping,
+  deliveryFee, 
+  suggestedProducts = [],
+  isStoreOpen 
+}: CartDrawerProps) {
+  const { items, removeItem, updateQuantity, subtotal, clearCart, addItem } = useCart();
 
   const total = subtotal + deliveryFee;
+
+  const handleAddSuggested = (product: SuggestedProduct) => {
+    addItem({
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+      quantity: 1,
+      options: [],
+      imageUrl: product.image_url || undefined,
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -283,6 +355,16 @@ export function CartDrawer({ open, onClose, onCheckout, deliveryFee }: CartDrawe
                   </Button>
                 </div>
               ))}
+
+              {/* Suggested Products */}
+              {suggestedProducts.length > 0 && (
+                <div className="pt-3 border-t border-border">
+                  <SuggestedProducts 
+                    products={suggestedProducts} 
+                    onAdd={handleAddSuggested} 
+                  />
+                </div>
+              )}
             </div>
 
             <div className="border-t border-border pt-4 space-y-3">
@@ -299,13 +381,29 @@ export function CartDrawer({ open, onClose, onCheckout, deliveryFee }: CartDrawe
                 <span className="text-primary">R$ {total.toFixed(2)}</span>
               </div>
 
-              <Button
-                className="w-full gradient-primary text-primary-foreground"
-                size="lg"
-                onClick={onCheckout}
-              >
-                Finalizar Pedido
-              </Button>
+              {!isStoreOpen && (
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive text-center">
+                  A loja está fechada no momento. Você pode adicionar itens, mas não finalizar o pedido.
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={onContinueShopping}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Continuar comprando
+                </Button>
+                <Button
+                  className="flex-1 gradient-primary text-primary-foreground"
+                  onClick={onCheckout}
+                  disabled={!isStoreOpen}
+                >
+                  Finalizar
+                </Button>
+              </div>
             </div>
           </>
         )}

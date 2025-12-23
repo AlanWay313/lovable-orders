@@ -15,6 +15,9 @@ import {
   Loader2,
   Check,
   Search,
+  Tag,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +37,14 @@ interface ViaCepResponse {
   localidade: string;
   uf: string;
   erro?: boolean;
+}
+
+interface Coupon {
+  id: string;
+  code: string;
+  discount_type: string;
+  discount_value: number;
+  min_order_value: number | null;
 }
 
 const checkoutSchema = z.object({
@@ -61,9 +72,10 @@ interface CheckoutPageProps {
   companyName: string;
   deliveryFee: number;
   onBack: () => void;
+  isStoreOpen?: boolean;
 }
 
-export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: CheckoutPageProps) {
+export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isStoreOpen = true }: CheckoutPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCart();
@@ -72,6 +84,12 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
   const [loadingCep, setLoadingCep] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [loadingCoupon, setLoadingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   const {
     register,
@@ -88,7 +106,15 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
 
   const paymentMethod = watch('paymentMethod');
   const zipCode = watch('zipCode');
-  const total = subtotal + deliveryFee;
+  
+  // Calculate discount
+  const discountAmount = appliedCoupon 
+    ? appliedCoupon.discount_type === 'percentage'
+      ? (subtotal * appliedCoupon.discount_value) / 100
+      : appliedCoupon.discount_value
+    : 0;
+  
+  const total = subtotal - discountAmount + deliveryFee;
 
   const searchCep = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -139,7 +165,80 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
     }
   };
 
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError('Digite um código de cupom');
+      return;
+    }
+
+    setLoadingCoupon(true);
+    setCouponError(null);
+
+    try {
+      const { data: coupon, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('code', couponCode.toUpperCase().trim())
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!coupon) {
+        setCouponError('Cupom não encontrado ou inválido');
+        return;
+      }
+
+      // Check expiration
+      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+        setCouponError('Este cupom expirou');
+        return;
+      }
+
+      // Check minimum order value
+      if (coupon.min_order_value && subtotal < coupon.min_order_value) {
+        setCouponError(`Pedido mínimo de R$ ${coupon.min_order_value.toFixed(2)} para este cupom`);
+        return;
+      }
+
+      // Check max uses
+      if (coupon.max_uses && coupon.current_uses >= coupon.max_uses) {
+        setCouponError('Este cupom atingiu o limite de uso');
+        return;
+      }
+
+      setAppliedCoupon(coupon);
+      toast({
+        title: 'Cupom aplicado!',
+        description: coupon.discount_type === 'percentage' 
+          ? `${coupon.discount_value}% de desconto` 
+          : `R$ ${coupon.discount_value.toFixed(2)} de desconto`,
+      });
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      setCouponError('Erro ao aplicar cupom');
+    } finally {
+      setLoadingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError(null);
+  };
+
   const onSubmit = async (data: CheckoutFormData) => {
+    if (!isStoreOpen) {
+      toast({
+        title: 'Loja fechada',
+        description: 'Esta loja está fechada no momento. Tente novamente mais tarde.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (items.length === 0) {
       toast({
         title: 'Carrinho vazio',
@@ -188,6 +287,8 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
           notes: data.notes || null,
           needs_change: data.paymentMethod === 'cash' ? data.needsChange : false,
           change_for: data.paymentMethod === 'cash' && data.needsChange ? data.changeFor : null,
+          coupon_id: appliedCoupon?.id || null,
+          discount_amount: discountAmount,
         })
         .select()
         .single();
@@ -212,7 +313,15 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
 
       if (itemsError) throw itemsError;
 
-      // 4. If payment method is online, redirect to Stripe checkout
+      // 4. Update coupon usage if applied
+      if (appliedCoupon) {
+        await supabase
+          .from('coupons')
+          .update({ current_uses: (appliedCoupon as any).current_uses + 1 })
+          .eq('id', appliedCoupon.id);
+      }
+
+      // 5. If payment method is online, redirect to Stripe checkout
       if (data.paymentMethod === 'online') {
         const response = await supabase.functions.invoke('create-checkout', {
           body: {
@@ -278,6 +387,12 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>R$ {subtotal.toFixed(2)}</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-success">
+                  <span>Desconto</span>
+                  <span>-R$ {discountAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Entrega</span>
                 <span>R$ {deliveryFee.toFixed(2)}</span>
@@ -309,6 +424,16 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
       </header>
 
       <div className="container py-6 max-w-2xl">
+        {/* Store Closed Warning */}
+        {!isStoreOpen && (
+          <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+            <p className="text-sm text-destructive">
+              A loja está fechada no momento. Não é possível finalizar pedidos.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Customer Info */}
           <section className="bg-card rounded-xl border border-border p-6">
@@ -468,6 +593,68 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
             </div>
           </section>
 
+          {/* Coupon */}
+          <section className="bg-card rounded-xl border border-border p-6">
+            <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
+              <Tag className="h-5 w-5 text-primary" />
+              Cupom de Desconto
+            </h2>
+            
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/20">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-success" />
+                  <span className="font-medium text-success">
+                    {appliedCoupon.code}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    ({appliedCoupon.discount_type === 'percentage' 
+                      ? `${appliedCoupon.discount_value}%` 
+                      : `R$ ${appliedCoupon.discount_value.toFixed(2)}`} de desconto)
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={removeCoupon}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Digite o código do cupom"
+                    value={couponCode}
+                    onChange={(e) => {
+                      setCouponCode(e.target.value.toUpperCase());
+                      setCouponError(null);
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={applyCoupon}
+                    disabled={loadingCoupon}
+                  >
+                    {loadingCoupon ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'Aplicar'
+                    )}
+                  </Button>
+                </div>
+                {couponError && (
+                  <p className="text-sm text-destructive">{couponError}</p>
+                )}
+              </div>
+            )}
+          </section>
+
           {/* Payment Method */}
           <section className="bg-card rounded-xl border border-border p-6">
             <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
@@ -578,6 +765,11 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
                 <div key={item.id} className="flex justify-between text-sm">
                   <span>
                     {item.quantity}x {item.productName}
+                    {item.options.length > 0 && (
+                      <span className="text-muted-foreground text-xs block">
+                        + {item.options.map(o => o.name).join(', ')}
+                      </span>
+                    )}
                   </span>
                   <span>
                     R$ {((item.price + item.options.reduce((s, o) => s + o.priceModifier, 0)) * item.quantity).toFixed(2)}
@@ -589,6 +781,12 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>R$ {subtotal.toFixed(2)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-success">
+                    <span>Desconto ({appliedCoupon?.code})</span>
+                    <span>-R$ {discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Taxa de entrega</span>
                   <span>R$ {deliveryFee.toFixed(2)}</span>
@@ -605,12 +803,12 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
             type="submit"
             className="w-full gradient-primary text-primary-foreground"
             size="lg"
-            disabled={loading || items.length === 0}
+            disabled={loading || items.length === 0 || !isStoreOpen}
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            Confirmar Pedido - R$ {total.toFixed(2)}
+            {isStoreOpen ? `Confirmar Pedido - R$ ${total.toFixed(2)}` : 'Loja Fechada'}
           </Button>
         </form>
       </div>
