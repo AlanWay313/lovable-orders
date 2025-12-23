@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
+import { useReportExport } from '@/hooks/useReportExport';
 import {
   ShoppingBag,
   TrendingUp,
@@ -13,6 +14,8 @@ import {
   CheckCircle,
   Package,
   Calendar,
+  FileDown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +73,19 @@ interface RecentOrder {
   status: string;
 }
 
+interface FullOrderData {
+  id: string;
+  created_at: string;
+  customer_name: string;
+  customer_phone: string;
+  total: number;
+  subtotal: number;
+  delivery_fee: number;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+}
+
 const statusColors: Record<string, string> = {
   pending: '#eab308',
   confirmed: '#3b82f6',
@@ -104,9 +120,13 @@ const periodCompareLabels: Record<PeriodFilter, string> = {
 
 export default function Dashboard() {
   const { user, hasRole } = useAuth();
+  const { exportToPDF, exportToExcel } = useReportExport();
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
   const [period, setPeriod] = useState<PeriodFilter>('today');
+  const [allOrdersData, setAllOrdersData] = useState<FullOrderData[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     ordersPeriod: 0,
     ordersPrevious: 0,
@@ -135,7 +155,7 @@ export default function Dashboard() {
       // Get company
       const { data: company } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', user.id)
         .maybeSingle();
 
@@ -145,6 +165,7 @@ export default function Dashboard() {
       }
 
       setCompanyId(company.id);
+      setCompanyName(company.name);
 
       const today = new Date();
       
@@ -158,10 +179,10 @@ export default function Dashboard() {
       const previousStart = startOfDay(subDays(today, periodDays * 2 - 1)).toISOString();
       const previousEnd = endOfDay(subDays(today, periodDays)).toISOString();
 
-      // Get all orders for the company
+      // Get all orders for the company with full data for export
       const { data: allOrders } = await supabase
         .from('orders')
-        .select('id, created_at, total, status, customer_name')
+        .select('id, created_at, total, subtotal, delivery_fee, status, customer_name, customer_phone, payment_method, payment_status')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
 
@@ -169,6 +190,8 @@ export default function Dashboard() {
         setLoading(false);
         return;
       }
+
+      setAllOrdersData(allOrders as FullOrderData[]);
 
       // Calculate stats for current period
       const ordersPeriod = allOrders.filter(
@@ -260,6 +283,51 @@ export default function Dashboard() {
     }
   };
 
+  const handleExport = async (type: 'pdf' | 'excel') => {
+    setExporting(true);
+    try {
+      // Calculate period for report
+      const today = new Date();
+      let periodDays = 1;
+      if (period === '7days') periodDays = 7;
+      if (period === '30days') periodDays = 30;
+
+      const periodStart = startOfDay(subDays(today, periodDays - 1)).toISOString();
+      const periodEnd = endOfDay(today).toISOString();
+
+      // Filter orders for current period
+      const ordersForExport = allOrdersData.filter(
+        (o) => o.created_at >= periodStart && o.created_at <= periodEnd
+      );
+
+      const validOrders = ordersForExport.filter((o) => o.status !== 'cancelled');
+      const totalRevenue = validOrders.reduce((sum, o) => sum + o.total, 0);
+
+      const reportData = {
+        orders: ordersForExport,
+        period: periodLabels[period],
+        companyName,
+        stats: {
+          totalOrders: ordersForExport.length,
+          totalRevenue,
+          averageTicket: validOrders.length > 0 ? totalRevenue / validOrders.length : 0,
+          deliveredOrders: ordersForExport.filter((o) => o.status === 'delivered').length,
+          cancelledOrders: ordersForExport.filter((o) => o.status === 'cancelled').length,
+        },
+      };
+
+      if (type === 'pdf') {
+        exportToPDF(reportData);
+      } else {
+        exportToExcel(reportData);
+      }
+    } catch (error) {
+      console.error('Error exporting report:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const calculateChange = (current: number, previous: number): { value: string; trend: 'up' | 'down' } => {
     if (previous === 0) {
       return { value: current > 0 ? '+100%' : '0%', trend: current >= 0 ? 'up' : 'down' };
@@ -335,7 +403,7 @@ export default function Dashboard() {
               Aqui está um resumo do seu período
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <div className="flex rounded-lg border border-border p-1">
               {(['today', '7days', '30days'] as PeriodFilter[]).map((p) => (
@@ -350,6 +418,29 @@ export default function Dashboard() {
                 </Button>
               ))}
             </div>
+            
+            {companyId && (
+              <div className="flex gap-2 ml-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExport('pdf')}
+                  disabled={exporting || allOrdersData.length === 0}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExport('excel')}
+                  disabled={exporting || allOrdersData.length === 0}
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-1" />
+                  Excel
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
