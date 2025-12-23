@@ -83,6 +83,7 @@ interface Driver {
   // For drivers without user account
   driver_name?: string;
   driver_phone?: string;
+  email?: string;
 }
 
 interface Order {
@@ -127,6 +128,7 @@ export default function DriversManagement() {
 
   // Form states
   const [newDriverName, setNewDriverName] = useState('');
+  const [newDriverEmail, setNewDriverEmail] = useState('');
   const [newDriverPhone, setNewDriverPhone] = useState('');
   const [newDriverVehicle, setNewDriverVehicle] = useState('moto');
   const [newDriverPlate, setNewDriverPlate] = useState('');
@@ -216,14 +218,15 @@ export default function DriversManagement() {
   };
 
   const handleAddDriver = async () => {
-    if (!companyId || !newDriverName) return;
+    if (!companyId || !newDriverName || !newDriverEmail) return;
 
     setSaving(true);
     try {
-      // Create driver record directly without user account
+      // Create driver record with email for future linking
       const { error: driverError } = await supabase.from('delivery_drivers').insert({
         company_id: companyId,
         driver_name: newDriverName,
+        email: newDriverEmail.toLowerCase().trim(),
         driver_phone: newDriverPhone || null,
         vehicle_type: newDriverVehicle,
         license_plate: newDriverPlate || null,
@@ -235,7 +238,7 @@ export default function DriversManagement() {
 
       toast({
         title: 'Entregador adicionado',
-        description: `${newDriverName} foi adicionado como entregador`,
+        description: `${newDriverName} foi cadastrado. Ele pode acessar pelo email ${newDriverEmail}`,
       });
 
       setShowAddDriver(false);
@@ -411,6 +414,7 @@ export default function DriversManagement() {
 
   const resetForm = () => {
     setNewDriverName('');
+    setNewDriverEmail('');
     setNewDriverPhone('');
     setNewDriverVehicle('moto');
     setNewDriverPlate('');
@@ -603,6 +607,17 @@ export default function DriversManagement() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {driver.email && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                            <span>{driver.email}</span>
+                            {driver.user_id ? (
+                              <Badge variant="default" className="text-xs bg-green-500">Vinculado</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">Aguardando cadastro</Badge>
+                            )}
+                          </div>
+                        )}
                         {(driver.driver_phone || driver.profile?.phone) && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Phone className="h-4 w-4" />
@@ -753,13 +768,17 @@ export default function DriversManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="driver-phone">Telefone</Label>
+              <Label htmlFor="driver-email">Email *</Label>
               <Input
-                id="driver-phone"
-                value={newDriverPhone}
-                onChange={(e) => setNewDriverPhone(e.target.value)}
-                placeholder="(11) 99999-9999"
+                id="driver-email"
+                type="email"
+                value={newDriverEmail}
+                onChange={(e) => setNewDriverEmail(e.target.value)}
+                placeholder="entregador@email.com"
               />
+              <p className="text-xs text-muted-foreground">
+                O entregador usará este email para acessar o sistema
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="driver-phone">Telefone</Label>
@@ -801,7 +820,7 @@ export default function DriversManagement() {
             </Button>
             <Button
               onClick={handleAddDriver}
-              disabled={saving || !newDriverName}
+              disabled={saving || !newDriverName || !newDriverEmail}
               className="gradient-primary text-primary-foreground"
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

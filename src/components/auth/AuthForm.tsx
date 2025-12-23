@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -50,6 +51,42 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
     resolver: zodResolver(schema),
   });
 
+  const linkDriverAccount = async (userId: string, email: string) => {
+    try {
+      // Check if there's a driver with this email that hasn't been linked yet
+      const { data: driver, error: driverError } = await supabase
+        .from('delivery_drivers')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .is('user_id', null)
+        .maybeSingle();
+
+      if (driverError) {
+        console.error('Error checking driver:', driverError);
+        return;
+      }
+
+      if (driver) {
+        // Link the driver to this user
+        await supabase
+          .from('delivery_drivers')
+          .update({ user_id: userId })
+          .eq('id', driver.id);
+
+        // Add driver role
+        await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: 'delivery_driver' })
+          .select()
+          .maybeSingle();
+
+        console.log('Driver account linked successfully');
+      }
+    } catch (error) {
+      console.error('Error linking driver account:', error);
+    }
+  };
+
   const onSubmit = async (data: SignupFormData) => {
     setLoading(true);
     try {
@@ -71,6 +108,30 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
           }
           return;
         }
+        
+        // After successful login, check and link driver account
+        const { data: { user: loggedUser } } = await supabase.auth.getUser();
+        if (loggedUser) {
+          await linkDriverAccount(loggedUser.id, data.email);
+          
+          // Check if user is a driver and redirect accordingly
+          const { data: driverCheck } = await supabase
+            .from('delivery_drivers')
+            .select('id')
+            .eq('user_id', loggedUser.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (driverCheck) {
+            toast({
+              title: 'Bem-vindo, entregador!',
+              description: 'Você será redirecionado para suas entregas',
+            });
+            navigate('/driver');
+            return;
+          }
+        }
+        
         toast({
           title: 'Bem-vindo!',
           description: 'Login realizado com sucesso',
@@ -94,6 +155,28 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
           }
           return;
         }
+        
+        // After signup, the trigger will auto-link if email matches a driver
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        if (newUser) {
+          // Check if user was linked as a driver
+          const { data: driverCheck } = await supabase
+            .from('delivery_drivers')
+            .select('id')
+            .eq('user_id', newUser.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (driverCheck) {
+            toast({
+              title: 'Conta criada!',
+              description: 'Você foi vinculado como entregador',
+            });
+            navigate('/driver');
+            return;
+          }
+        }
+        
         toast({
           title: 'Conta criada!',
           description: 'Sua conta foi criada com sucesso',
