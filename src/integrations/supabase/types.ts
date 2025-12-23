@@ -271,12 +271,15 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          current_latitude: number | null
+          current_longitude: number | null
           driver_name: string | null
           driver_phone: string | null
           id: string
           is_active: boolean | null
           is_available: boolean | null
           license_plate: string | null
+          location_updated_at: string | null
           updated_at: string
           user_id: string | null
           vehicle_type: string | null
@@ -284,12 +287,15 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          current_latitude?: number | null
+          current_longitude?: number | null
           driver_name?: string | null
           driver_phone?: string | null
           id?: string
           is_active?: boolean | null
           is_available?: boolean | null
           license_plate?: string | null
+          location_updated_at?: string | null
           updated_at?: string
           user_id?: string | null
           vehicle_type?: string | null
@@ -297,12 +303,15 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          current_latitude?: number | null
+          current_longitude?: number | null
           driver_name?: string | null
           driver_phone?: string | null
           id?: string
           is_active?: boolean | null
           is_available?: boolean | null
           license_plate?: string | null
+          location_updated_at?: string | null
           updated_at?: string
           user_id?: string | null
           vehicle_type?: string | null
