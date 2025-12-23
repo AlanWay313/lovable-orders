@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Loader2, ArrowLeft, Truck, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,54 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function DriverLogin() {
   const navigate = useNavigate();
+  const { user, loading: authLoading, hasRole, signOut } = useAuth();
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (authLoading) return;
+    
+    if (user) {
+      const isDriver = hasRole('delivery_driver');
+      const isStoreOwner = hasRole('store_owner');
+      const isSuperAdmin = hasRole('super_admin');
+      
+      // If user is a driver, redirect to driver dashboard
+      if (isDriver) {
+        navigate('/driver', { replace: true });
+        return;
+      }
+      
+      // If user is store owner or admin (not a driver), sign them out first
+      // to avoid session conflicts
+      if (isStoreOwner || isSuperAdmin) {
+        // Show message and sign out
+        toast.info('Você está logado como lojista', {
+          description: 'Faça logout para acessar como entregador',
+        });
+        signOut();
+      }
+    }
+  }, [user, authLoading, hasRole, navigate, signOut]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
