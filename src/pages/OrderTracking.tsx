@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import DeliveryMap from '@/components/map/DeliveryMap';
+import { PushNotificationButton } from '@/components/PushNotificationButton';
 
 interface Order {
   id: string;
@@ -258,6 +259,14 @@ export default function OrderTracking() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Push Notification Button */}
+        <div className="flex justify-center">
+          <PushNotificationButton
+            orderId={order.id}
+            userType="customer"
+          />
+        </div>
+
         {/* Status Card */}
         <Card className={isUpdating ? 'animate-pulse' : ''}>
           <CardHeader className="pb-2">
