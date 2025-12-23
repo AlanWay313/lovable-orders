@@ -85,13 +85,23 @@ export default function OrderTracking() {
     };
   }, []);
 
-  // Play notification sound
+  // Play notification sound and vibrate
   const playNotificationSound = useCallback(() => {
+    // Play sound
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch((err) => {
         console.log('Could not play notification sound:', err);
       });
+    }
+    
+    // Vibrate on mobile devices (pattern: vibrate 200ms, pause 100ms, vibrate 200ms)
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([200, 100, 200]);
+      } catch (err) {
+        console.log('Could not vibrate:', err);
+      }
     }
   }, []);
 
