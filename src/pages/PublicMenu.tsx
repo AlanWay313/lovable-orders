@@ -8,7 +8,8 @@ import {
   Search, 
   ChevronRight,
   Store,
-  AlertCircle
+  AlertCircle,
+  Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCart, CartProvider } from '@/hooks/useCart';
 import { ProductModal, CartDrawer } from '@/components/menu/ProductModal';
 import { CheckoutPage } from '@/components/menu/CheckoutPage';
+import { TrackOrderModal } from '@/components/menu/TrackOrderModal';
 import { cn } from '@/lib/utils';
 
 interface Company {
@@ -78,6 +80,7 @@ function PublicMenuContent() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutMode, setCheckoutMode] = useState(false);
+  const [trackOrderOpen, setTrackOrderOpen] = useState(false);
 
   useEffect(() => {
     if (slug) {
@@ -268,13 +271,22 @@ function PublicMenuContent() {
                 )}
               </div>
 
-              <div className="flex gap-4 mt-3 text-sm">
+              <div className="flex flex-wrap gap-2 mt-3 text-sm">
                 <div className="px-3 py-1 rounded-full bg-accent text-accent-foreground">
                   Taxa: R$ {Number(company.delivery_fee).toFixed(2)}
                 </div>
                 <div className="px-3 py-1 rounded-full bg-accent text-accent-foreground">
                   Pedido mín: R$ {Number(company.min_order_value).toFixed(2)}
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTrackOrderOpen(true)}
+                  className="h-7 px-3"
+                >
+                  <Package className="mr-1 h-3 w-3" />
+                  Acompanhar pedido
+                </Button>
               </div>
             </div>
           </div>
@@ -439,6 +451,13 @@ function PublicMenuContent() {
           image_url: p.image_url
         }))}
         isStoreOpen={company.is_open}
+      />
+
+      {/* Track Order Modal */}
+      <TrackOrderModal
+        open={trackOrderOpen}
+        onClose={() => setTrackOrderOpen(false)}
+        companyId={company.id}
       />
     </div>
   );
