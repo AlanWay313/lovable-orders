@@ -526,9 +526,18 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
               </div>
             </div>
           </div>
-          <Button onClick={onBack} variant="outline" className="w-full">
-            Voltar ao Cardápio
-          </Button>
+          <div className="flex flex-col gap-3">
+            <Button onClick={onBack} variant="outline" className="w-full">
+              Voltar ao Cardápio
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="w-full"
+              onClick={() => navigate('/orders')}
+            >
+              Ver meus pedidos
+            </Button>
+          </div>
         </div>
       </div>
     );
