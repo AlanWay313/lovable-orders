@@ -33,7 +33,7 @@ const handler = async (req: Request): Promise<Response> => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Cardpon <onboarding@resend.dev>",
+        from: "Cardpon <noreply@cardpon.com.br>",
         to: [driverEmail],
         subject: `${companyName} - Você foi cadastrado como entregador!`,
         html: `
