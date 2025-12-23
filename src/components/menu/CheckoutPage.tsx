@@ -208,7 +208,34 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
 
       if (itemsError) throw itemsError;
 
-      // Success!
+      // 4. If payment method is online, redirect to Stripe checkout
+      if (data.paymentMethod === 'online') {
+        const response = await supabase.functions.invoke('create-checkout', {
+          body: {
+            orderId: orderData.id,
+            items: items.map(item => ({
+              productName: item.productName,
+              price: item.price,
+              quantity: item.quantity,
+              options: item.options,
+            })),
+            total,
+            customerEmail: data.customerEmail || null,
+            customerName: data.customerName,
+          },
+        });
+
+        if (response.error) throw new Error(response.error.message);
+        
+        const { url } = response.data;
+        if (url) {
+          clearCart();
+          window.location.href = url;
+          return;
+        }
+      }
+
+      // Success for non-online payments
       setOrderId(orderData.id);
       setOrderComplete(true);
       clearCart();
