@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Phone, Mail, User, X } from 'lucide-react';
+import { Loader2, Phone, Mail, ArrowLeft } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,23 +13,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const loginSchema = z.object({
+const emailSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
 });
 
-const registerSchema = z.object({
-  name: z.string().min(2, 'Nome é obrigatório'),
-  email: z.string().email('Email inválido'),
-  phone: z.string().min(10, 'Telefone inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+const phoneSchema = z.object({
+  phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
 });
 
-type LoginFormData = z.infer<typeof loginSchema>;
-type RegisterFormData = z.infer<typeof registerSchema>;
+type EmailFormData = z.infer<typeof emailSchema>;
+type PhoneFormData = z.infer<typeof phoneSchema>;
 
 interface CustomerAuthModalProps {
   open: boolean;
@@ -37,215 +34,272 @@ interface CustomerAuthModalProps {
   onSuccess: () => void;
 }
 
+type Step = 'input' | 'verify';
+type Method = 'email' | 'phone';
+
 export function CustomerAuthModal({ open, onClose, onSuccess }: CustomerAuthModalProps) {
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [step, setStep] = useState<Step>('input');
+  const [method, setMethod] = useState<Method>('email');
+  const [otpValue, setOtpValue] = useState('');
+  const [sentTo, setSentTo] = useState('');
 
-  const loginForm = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
+  const emailForm = useForm<EmailFormData>({
+    resolver: zodResolver(emailSchema),
   });
 
-  const registerForm = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
+  const phoneForm = useForm<PhoneFormData>({
+    resolver: zodResolver(phoneSchema),
   });
 
-  const handleLogin = async (data: LoginFormData) => {
+  const resetState = () => {
+    setStep('input');
+    setOtpValue('');
+    setSentTo('');
+    emailForm.reset();
+    phoneForm.reset();
+  };
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+  };
+
+  const formatPhone = (phone: string) => {
+    // Format to E.164: +55XXXXXXXXXXX
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('55')) {
+      return `+${digits}`;
+    }
+    return `+55${digits}`;
+  };
+
+  const handleSendEmailOTP = async (data: EmailFormData) => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithOtp({
         email: data.email,
-        password: data.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
       });
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Email ou senha incorretos');
+        toast.error(error.message);
+        return;
+      }
+
+      setSentTo(data.email);
+      setStep('verify');
+      toast.success('Código enviado para seu email!');
+    } catch (error: any) {
+      toast.error('Erro ao enviar código');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendPhoneOTP = async (data: PhoneFormData) => {
+    setLoading(true);
+    try {
+      const formattedPhone = formatPhone(data.phone);
+      
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
+      });
+
+      if (error) {
+        if (error.message.includes('Phone logins are disabled')) {
+          toast.error('Login por telefone não está habilitado. Use o email.');
+          setMethod('email');
         } else {
           toast.error(error.message);
         }
         return;
       }
 
-      toast.success('Login realizado com sucesso!');
-      onSuccess();
-      onClose();
+      setSentTo(formattedPhone);
+      setStep('verify');
+      toast.success('Código enviado para seu telefone!');
     } catch (error: any) {
-      toast.error('Erro ao fazer login');
+      toast.error('Erro ao enviar código');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = async (data: RegisterFormData) => {
+  const handleVerifyOTP = async () => {
+    if (otpValue.length !== 6) {
+      toast.error('Digite o código de 6 dígitos');
+      return;
+    }
+
     setLoading(true);
     try {
-      // First create the auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: data.name,
-            phone: data.phone,
-          },
-        },
-      });
+      const verifyOptions = method === 'email' 
+        ? { email: sentTo, token: otpValue, type: 'email' as const }
+        : { phone: sentTo, token: otpValue, type: 'sms' as const };
 
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          toast.error('Este email já está cadastrado. Faça login.');
-          setActiveTab('login');
-        } else {
-          toast.error(authError.message);
-        }
+      const { error } = await supabase.auth.verifyOtp(verifyOptions);
+
+      if (error) {
+        toast.error('Código inválido ou expirado');
         return;
       }
 
-      // Create customer record (will be linked by trigger if user already exists)
-      await supabase.from('customers').insert({
-        user_id: authData.user?.id,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-      });
-
-      toast.success('Cadastro realizado com sucesso!');
+      toast.success('Login realizado com sucesso!');
+      resetState();
       onSuccess();
       onClose();
     } catch (error: any) {
-      toast.error('Erro ao criar conta');
+      toast.error('Erro ao verificar código');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (method === 'email') {
+      await handleSendEmailOTP({ email: sentTo });
+    } else {
+      await handleSendPhoneOTP({ phone: sentTo });
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-center">Entrar ou Cadastrar</DialogTitle>
+          <DialogTitle className="text-center">
+            {step === 'input' ? 'Entrar na sua conta' : 'Digite o código'}
+          </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'login' | 'register')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Entrar</TabsTrigger>
-            <TabsTrigger value="register">Cadastrar</TabsTrigger>
-          </TabsList>
+        {step === 'input' ? (
+          <Tabs value={method} onValueChange={(v) => setMethod(v as Method)}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="email">
+                <Mail className="h-4 w-4 mr-2" />
+                Email
+              </TabsTrigger>
+              <TabsTrigger value="phone">
+                <Phone className="h-4 w-4 mr-2" />
+                Telefone
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="login" className="mt-4">
-            <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login-email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    className="pl-10"
-                    {...loginForm.register('email')}
-                  />
+            <TabsContent value="email" className="mt-4">
+              <form onSubmit={emailForm.handleSubmit(handleSendEmailOTP)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      className="pl-10"
+                      {...emailForm.register('email')}
+                    />
+                  </div>
+                  {emailForm.formState.errors.email && (
+                    <p className="text-sm text-destructive">{emailForm.formState.errors.email.message}</p>
+                  )}
                 </div>
-                {loginForm.formState.errors.email && (
-                  <p className="text-sm text-destructive">{loginForm.formState.errors.email.message}</p>
-                )}
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="login-password">Senha</Label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  placeholder="••••••"
-                  {...loginForm.register('password')}
-                />
-                {loginForm.formState.errors.password && (
-                  <p className="text-sm text-destructive">{loginForm.formState.errors.password.message}</p>
-                )}
-              </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Enviar código
+                </Button>
+              </form>
+            </TabsContent>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+            <TabsContent value="phone" className="mt-4">
+              <form onSubmit={phoneForm.handleSubmit(handleSendPhoneOTP)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="(00) 00000-0000"
+                      className="pl-10"
+                      {...phoneForm.register('phone')}
+                    />
+                  </div>
+                  {phoneForm.formState.errors.phone && (
+                    <p className="text-sm text-destructive">{phoneForm.formState.errors.phone.message}</p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Enviar código
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="space-y-6">
+            <div className="text-center text-sm text-muted-foreground">
+              Enviamos um código de 6 dígitos para{' '}
+              <span className="font-medium text-foreground">{sentTo}</span>
+            </div>
+
+            <div className="flex justify-center">
+              <InputOTP 
+                maxLength={6} 
+                value={otpValue} 
+                onChange={setOtpValue}
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+
+            <div className="space-y-2">
+              <Button 
+                onClick={handleVerifyOTP} 
+                className="w-full" 
+                disabled={loading || otpValue.length !== 6}
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Entrar
+                Verificar código
               </Button>
-            </form>
-          </TabsContent>
 
-          <TabsContent value="register" className="mt-4">
-            <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="register-name">Nome completo</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="register-name"
-                    placeholder="Seu nome"
-                    className="pl-10"
-                    {...registerForm.register('name')}
-                  />
-                </div>
-                {registerForm.formState.errors.name && (
-                  <p className="text-sm text-destructive">{registerForm.formState.errors.name.message}</p>
-                )}
+              <div className="flex items-center justify-between">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setStep('input')}
+                  disabled={loading}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Voltar
+                </Button>
+                
+                <Button 
+                  variant="link" 
+                  size="sm"
+                  onClick={handleResendCode}
+                  disabled={loading}
+                >
+                  Reenviar código
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="register-email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    className="pl-10"
-                    {...registerForm.register('email')}
-                  />
-                </div>
-                {registerForm.formState.errors.email && (
-                  <p className="text-sm text-destructive">{registerForm.formState.errors.email.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-phone">Telefone</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="register-phone"
-                    placeholder="(00) 00000-0000"
-                    className="pl-10"
-                    {...registerForm.register('phone')}
-                  />
-                </div>
-                {registerForm.formState.errors.phone && (
-                  <p className="text-sm text-destructive">{registerForm.formState.errors.phone.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-password">Senha</Label>
-                <Input
-                  id="register-password"
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
-                  {...registerForm.register('password')}
-                />
-                {registerForm.formState.errors.password && (
-                  <p className="text-sm text-destructive">{registerForm.formState.errors.password.message}</p>
-                )}
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar Conta
-              </Button>
-            </form>
-          </TabsContent>
-        </Tabs>
+            </div>
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground text-center">
-          Ao continuar, você concorda com nossos termos de uso e política de privacidade.
+          Usamos apenas para acompanhar seus pedidos e endereços salvos.
         </p>
       </DialogContent>
     </Dialog>
