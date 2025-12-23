@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useDriverLocation } from '@/hooks/useDriverLocation';
+import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -232,6 +233,15 @@ export default function DriverDashboard() {
               <Switch
                 checked={trackingEnabled}
                 onCheckedChange={handleToggleTracking}
+              />
+            </div>
+
+            <div className="pt-2 border-t border-border">
+              <PushNotificationButton
+                companyId={driver?.company_id}
+                userId={user?.id}
+                userType="driver"
+                className="w-full"
               />
             </div>
           </CardContent>
