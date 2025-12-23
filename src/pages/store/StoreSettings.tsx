@@ -24,10 +24,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { OperatingHoursEditor, OperatingHours, DEFAULT_HOURS } from '@/components/store/OperatingHoursEditor';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
+import { Json } from '@/integrations/supabase/types';
 
 const companySchema = z.object({
   name: z.string().min(2, 'Nome é obrigatório').max(100),
@@ -73,6 +75,7 @@ interface Company {
   subscription_status: string | null;
   subscription_plan: string | null;
   monthly_order_count: number | null;
+  opening_hours: Json | null;
 }
 
 export default function StoreSettings() {
@@ -85,6 +88,7 @@ export default function StoreSettings() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [operatingHours, setOperatingHours] = useState<OperatingHours>(DEFAULT_HOURS);
 
   const {
     register,
@@ -120,6 +124,12 @@ export default function StoreSettings() {
         setLogoUrl(data.logo_url);
         setCoverUrl(data.cover_url);
         setIsOpen(data.is_open);
+        // Load operating hours from JSON
+        if (data.opening_hours && typeof data.opening_hours === 'object') {
+          setOperatingHours(data.opening_hours as unknown as OperatingHours);
+        } else {
+          setOperatingHours(DEFAULT_HOURS);
+        }
         reset({
           name: data.name,
           slug: data.slug,
@@ -175,6 +185,7 @@ export default function StoreSettings() {
         is_open: isOpen,
         pix_key: data.pixKey || null,
         pix_key_type: data.pixKeyType || null,
+        opening_hours: operatingHours as unknown as Json,
       };
 
       if (company) {
@@ -568,6 +579,12 @@ export default function StoreSettings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Operating Hours */}
+          <OperatingHoursEditor
+            value={operatingHours}
+            onChange={setOperatingHours}
+          />
 
           {/* Colors */}
           <Card>
