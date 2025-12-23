@@ -72,15 +72,23 @@ export type Database = {
           logo_url: string | null
           max_delivery_radius_km: number | null
           min_order_value: number | null
+          monthly_order_count: number | null
           name: string
           opening_hours: Json | null
+          order_count_reset_date: string | null
           owner_id: string
           phone: string | null
+          pix_key: string | null
+          pix_key_type: string | null
           primary_color: string | null
           secondary_color: string | null
           slug: string
           state: string | null
           status: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id: string | null
+          subscription_end_date: string | null
+          subscription_plan: string | null
+          subscription_status: string | null
           updated_at: string
           zip_code: string | null
         }
@@ -97,15 +105,23 @@ export type Database = {
           logo_url?: string | null
           max_delivery_radius_km?: number | null
           min_order_value?: number | null
+          monthly_order_count?: number | null
           name: string
           opening_hours?: Json | null
+          order_count_reset_date?: string | null
           owner_id: string
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           slug: string
           state?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id?: string | null
+          subscription_end_date?: string | null
+          subscription_plan?: string | null
+          subscription_status?: string | null
           updated_at?: string
           zip_code?: string | null
         }
@@ -122,15 +138,23 @@ export type Database = {
           logo_url?: string | null
           max_delivery_radius_km?: number | null
           min_order_value?: number | null
+          monthly_order_count?: number | null
           name?: string
           opening_hours?: Json | null
+          order_count_reset_date?: string | null
           owner_id?: string
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           slug?: string
           state?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id?: string | null
+          subscription_end_date?: string | null
+          subscription_plan?: string | null
+          subscription_status?: string | null
           updated_at?: string
           zip_code?: string | null
         }
@@ -382,6 +406,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          change_for: number | null
           company_id: string
           coupon_id: string | null
           created_at: string
@@ -396,6 +421,7 @@ export type Database = {
           discount_amount: number | null
           estimated_delivery_time: string | null
           id: string
+          needs_change: boolean | null
           notes: string | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status: Database["public"]["Enums"]["payment_status"]
@@ -406,6 +432,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          change_for?: number | null
           company_id: string
           coupon_id?: string | null
           created_at?: string
@@ -420,6 +447,7 @@ export type Database = {
           discount_amount?: number | null
           estimated_delivery_time?: string | null
           id?: string
+          needs_change?: boolean | null
           notes?: string | null
           payment_method: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]
@@ -430,6 +458,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          change_for?: number | null
           company_id?: string
           coupon_id?: string | null
           created_at?: string
@@ -444,6 +473,7 @@ export type Database = {
           discount_amount?: number | null
           estimated_delivery_time?: string | null
           id?: string
+          needs_change?: boolean | null
           notes?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"]
           payment_status?: Database["public"]["Enums"]["payment_status"]

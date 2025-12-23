@@ -14,6 +14,7 @@ import {
   Bell,
   ChevronDown,
   Ticket,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { label: "Entregas", href: "/dashboard/deliveries", icon: Truck, roles: ["store_owner", "delivery_driver"] },
   { label: "Entregadores", href: "/dashboard/drivers", icon: Users, roles: ["store_owner"] },
   { label: "Cupons", href: "/dashboard/coupons", icon: Ticket, roles: ["store_owner"] },
+  { label: "Planos", href: "/dashboard/plans", icon: Crown, roles: ["store_owner"] },
   { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["super_admin"] },
   { label: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
