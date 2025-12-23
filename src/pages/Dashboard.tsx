@@ -4,7 +4,6 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   ShoppingBag,
   TrendingUp,
-  Users,
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
@@ -13,9 +12,11 @@ import {
   Clock,
   CheckCircle,
   Package,
+  Calendar,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import {
   AreaChart,
@@ -31,20 +32,22 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { format, subDays, startOfDay, endOfDay, isToday, isYesterday } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+type PeriodFilter = 'today' | '7days' | '30days';
+
 interface DashboardStats {
-  ordersToday: number;
-  ordersYesterday: number;
-  revenueToday: number;
-  revenueYesterday: number;
+  ordersPeriod: number;
+  ordersPrevious: number;
+  revenuePeriod: number;
+  revenuePrevious: number;
   averageTicket: number;
-  averageTicketYesterday: number;
+  averageTicketPrevious: number;
   pendingOrders: number;
   inDeliveryOrders: number;
-  deliveredToday: number;
-  cancelledToday: number;
+  deliveredPeriod: number;
+  cancelledPeriod: number;
 }
 
 interface ChartData {
@@ -87,21 +90,34 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelado',
 };
 
+const periodLabels: Record<PeriodFilter, string> = {
+  today: 'Hoje',
+  '7days': '7 dias',
+  '30days': '30 dias',
+};
+
+const periodCompareLabels: Record<PeriodFilter, string> = {
+  today: 'vs ontem',
+  '7days': 'vs 7 dias anteriores',
+  '30days': 'vs 30 dias anteriores',
+};
+
 export default function Dashboard() {
   const { user, hasRole } = useAuth();
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<PeriodFilter>('today');
   const [stats, setStats] = useState<DashboardStats>({
-    ordersToday: 0,
-    ordersYesterday: 0,
-    revenueToday: 0,
-    revenueYesterday: 0,
+    ordersPeriod: 0,
+    ordersPrevious: 0,
+    revenuePeriod: 0,
+    revenuePrevious: 0,
     averageTicket: 0,
-    averageTicketYesterday: 0,
+    averageTicketPrevious: 0,
     pendingOrders: 0,
     inDeliveryOrders: 0,
-    deliveredToday: 0,
-    cancelledToday: 0,
+    deliveredPeriod: 0,
+    cancelledPeriod: 0,
   });
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [statusData, setStatusData] = useState<OrderStatusData[]>([]);
@@ -109,7 +125,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [user]);
+  }, [user, period]);
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -131,10 +147,16 @@ export default function Dashboard() {
       setCompanyId(company.id);
 
       const today = new Date();
-      const todayStart = startOfDay(today).toISOString();
-      const todayEnd = endOfDay(today).toISOString();
-      const yesterdayStart = startOfDay(subDays(today, 1)).toISOString();
-      const yesterdayEnd = endOfDay(subDays(today, 1)).toISOString();
+      
+      // Calculate period ranges based on filter
+      let periodDays = 1;
+      if (period === '7days') periodDays = 7;
+      if (period === '30days') periodDays = 30;
+
+      const periodStart = startOfDay(subDays(today, periodDays - 1)).toISOString();
+      const periodEnd = endOfDay(today).toISOString();
+      const previousStart = startOfDay(subDays(today, periodDays * 2 - 1)).toISOString();
+      const previousEnd = endOfDay(subDays(today, periodDays)).toISOString();
 
       // Get all orders for the company
       const { data: allOrders } = await supabase
@@ -148,54 +170,54 @@ export default function Dashboard() {
         return;
       }
 
-      // Calculate stats
-      const ordersToday = allOrders.filter(
-        (o) => o.created_at >= todayStart && o.created_at <= todayEnd
+      // Calculate stats for current period
+      const ordersPeriod = allOrders.filter(
+        (o) => o.created_at >= periodStart && o.created_at <= periodEnd
       );
-      const ordersYesterday = allOrders.filter(
-        (o) => o.created_at >= yesterdayStart && o.created_at <= yesterdayEnd
+      const ordersPrevious = allOrders.filter(
+        (o) => o.created_at >= previousStart && o.created_at <= previousEnd
       );
 
-      const revenueToday = ordersToday
+      const revenuePeriod = ordersPeriod
         .filter((o) => o.status !== 'cancelled')
         .reduce((sum, o) => sum + o.total, 0);
-      const revenueYesterday = ordersYesterday
+      const revenuePrevious = ordersPrevious
         .filter((o) => o.status !== 'cancelled')
         .reduce((sum, o) => sum + o.total, 0);
 
-      const validOrdersToday = ordersToday.filter((o) => o.status !== 'cancelled');
-      const validOrdersYesterday = ordersYesterday.filter((o) => o.status !== 'cancelled');
+      const validOrdersPeriod = ordersPeriod.filter((o) => o.status !== 'cancelled');
+      const validOrdersPrevious = ordersPrevious.filter((o) => o.status !== 'cancelled');
 
-      const averageTicket = validOrdersToday.length > 0
-        ? revenueToday / validOrdersToday.length
+      const averageTicket = validOrdersPeriod.length > 0
+        ? revenuePeriod / validOrdersPeriod.length
         : 0;
-      const averageTicketYesterday = validOrdersYesterday.length > 0
-        ? revenueYesterday / validOrdersYesterday.length
+      const averageTicketPrevious = validOrdersPrevious.length > 0
+        ? revenuePrevious / validOrdersPrevious.length
         : 0;
 
       const pendingOrders = allOrders.filter(
         (o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
       ).length;
       const inDeliveryOrders = allOrders.filter((o) => o.status === 'out_for_delivery').length;
-      const deliveredToday = ordersToday.filter((o) => o.status === 'delivered').length;
-      const cancelledToday = ordersToday.filter((o) => o.status === 'cancelled').length;
+      const deliveredPeriod = ordersPeriod.filter((o) => o.status === 'delivered').length;
+      const cancelledPeriod = ordersPeriod.filter((o) => o.status === 'cancelled').length;
 
       setStats({
-        ordersToday: ordersToday.length,
-        ordersYesterday: ordersYesterday.length,
-        revenueToday,
-        revenueYesterday,
+        ordersPeriod: ordersPeriod.length,
+        ordersPrevious: ordersPrevious.length,
+        revenuePeriod,
+        revenuePrevious,
         averageTicket,
-        averageTicketYesterday,
+        averageTicketPrevious,
         pendingOrders,
         inDeliveryOrders,
-        deliveredToday,
-        cancelledToday,
+        deliveredPeriod,
+        cancelledPeriod,
       });
 
-      // Calculate chart data (last 7 days)
-      const last7Days: ChartData[] = [];
-      for (let i = 6; i >= 0; i--) {
+      // Calculate chart data based on period
+      const chartDays: ChartData[] = [];
+      for (let i = periodDays - 1; i >= 0; i--) {
         const date = subDays(today, i);
         const dayStart = startOfDay(date).toISOString();
         const dayEnd = endOfDay(date).toISOString();
@@ -204,13 +226,15 @@ export default function Dashboard() {
           (o) => o.created_at >= dayStart && o.created_at <= dayEnd && o.status !== 'cancelled'
         );
 
-        last7Days.push({
-          date: format(date, 'EEE', { locale: ptBR }),
+        chartDays.push({
+          date: periodDays <= 7 
+            ? format(date, 'EEE', { locale: ptBR })
+            : format(date, 'dd/MM', { locale: ptBR }),
           orders: dayOrders.length,
           revenue: dayOrders.reduce((sum, o) => sum + o.total, 0),
         });
       }
-      setChartData(last7Days);
+      setChartData(chartDays);
 
       // Calculate status distribution
       const statusCounts: Record<string, number> = {};
@@ -264,21 +288,21 @@ export default function Dashboard() {
     );
   }
 
-  const ordersChange = calculateChange(stats.ordersToday, stats.ordersYesterday);
-  const revenueChange = calculateChange(stats.revenueToday, stats.revenueYesterday);
-  const ticketChange = calculateChange(stats.averageTicket, stats.averageTicketYesterday);
+  const ordersChange = calculateChange(stats.ordersPeriod, stats.ordersPrevious);
+  const revenueChange = calculateChange(stats.revenuePeriod, stats.revenuePrevious);
+  const ticketChange = calculateChange(stats.averageTicket, stats.averageTicketPrevious);
 
   const statsCards = [
     {
-      title: 'Pedidos Hoje',
-      value: stats.ordersToday.toString(),
+      title: `Pedidos ${periodLabels[period]}`,
+      value: stats.ordersPeriod.toString(),
       change: ordersChange.value,
       trend: ordersChange.trend,
       icon: ShoppingBag,
     },
     {
-      title: 'Faturamento Hoje',
-      value: formatCurrency(stats.revenueToday),
+      title: `Faturamento ${periodLabels[period]}`,
+      value: formatCurrency(stats.revenuePeriod),
       change: revenueChange.value,
       trend: revenueChange.trend,
       icon: DollarSign,
@@ -301,14 +325,32 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
-        {/* Welcome section */}
-        <div>
-          <h1 className="text-2xl font-bold font-display text-foreground">
-            Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Usuário'}! 👋
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Aqui está um resumo do seu dia
-          </p>
+        {/* Header with filter */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold font-display text-foreground">
+              Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Usuário'}! 👋
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Aqui está um resumo do seu período
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="flex rounded-lg border border-border p-1">
+              {(['today', '7days', '30days'] as PeriodFilter[]).map((p) => (
+                <Button
+                  key={p}
+                  variant={period === p ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setPeriod(p)}
+                  className={period === p ? 'gradient-primary text-primary-foreground' : ''}
+                >
+                  {periodLabels[p]}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Stats grid */}
@@ -335,7 +377,7 @@ export default function Dashboard() {
                     <span className={stat.trend === 'up' ? 'text-green-500' : 'text-red-500'}>
                       {stat.change}
                     </span>
-                    <span className="text-muted-foreground ml-1">vs ontem</span>
+                    <span className="text-muted-foreground ml-1">{periodCompareLabels[period]}</span>
                   </div>
                 ) : stat.subValue ? (
                   <p className="text-xs text-muted-foreground mt-1">{stat.subValue}</p>
@@ -351,7 +393,7 @@ export default function Dashboard() {
             {/* Revenue Chart */}
             <Card>
               <CardHeader>
-                <CardTitle className="font-display">Faturamento - Últimos 7 dias</CardTitle>
+                <CardTitle className="font-display">Faturamento - {periodLabels[period]}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
@@ -395,7 +437,7 @@ export default function Dashboard() {
             {/* Orders Chart */}
             <Card>
               <CardHeader>
-                <CardTitle className="font-display">Pedidos - Últimos 7 dias</CardTitle>
+                <CardTitle className="font-display">Pedidos - {periodLabels[period]}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
@@ -480,14 +522,14 @@ export default function Dashboard() {
                       <CheckCircle className="h-5 w-5" />
                       <span className="font-medium">Entregues</span>
                     </div>
-                    <p className="text-3xl font-bold mt-2">{stats.deliveredToday}</p>
+                    <p className="text-3xl font-bold mt-2">{stats.deliveredPeriod}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
                     <div className="flex items-center gap-2 text-red-600">
                       <Package className="h-5 w-5" />
                       <span className="font-medium">Cancelados</span>
                     </div>
-                    <p className="text-3xl font-bold mt-2">{stats.cancelledToday}</p>
+                    <p className="text-3xl font-bold mt-2">{stats.cancelledPeriod}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                     <div className="flex items-center gap-2 text-yellow-600">
