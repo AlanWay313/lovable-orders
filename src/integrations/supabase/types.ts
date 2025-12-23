@@ -684,6 +684,60 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          company_id: string | null
+          created_at: string
+          endpoint: string
+          id: string
+          order_id: string | null
+          p256dh: string
+          updated_at: string
+          user_id: string | null
+          user_type: string
+        }
+        Insert: {
+          auth: string
+          company_id?: string | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          order_id?: string | null
+          p256dh: string
+          updated_at?: string
+          user_id?: string | null
+          user_type?: string
+        }
+        Update: {
+          auth?: string
+          company_id?: string | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          order_id?: string | null
+          p256dh?: string
+          updated_at?: string
+          user_id?: string | null
+          user_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
