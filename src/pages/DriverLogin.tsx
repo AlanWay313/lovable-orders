@@ -94,7 +94,7 @@ export default function DriverLogin() {
       // Send OTP and custom email via edge function
       const { data: otpData, error: otpError } = await supabase.functions.invoke(
         'send-driver-otp',
-        { body: { email: email.toLowerCase().trim() } }
+        { body: { email: email.toLowerCase().trim(), origin: window.location.origin } }
       );
 
       if (otpError) throw otpError;
@@ -150,7 +150,7 @@ export default function DriverLogin() {
       // Resend OTP via edge function
       const { error } = await supabase.functions.invoke(
         'send-driver-otp',
-        { body: { email: email.toLowerCase().trim() } }
+        { body: { email: email.toLowerCase().trim(), origin: window.location.origin } }
       );
 
       if (error) throw error;
