@@ -369,32 +369,53 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
                 {(group.selection_type === 'multiple' || group.selection_type === 'half_half') && (
                   <div className="space-y-2">
                     {group.options.map((option) => {
-                      const isSelected = isOptionSelected(option.id);
-                      const currentCount = getGroupSelectionCount(group.id);
+                      const isSelected = selectedOptions.some((o) => o.optionId === option.id);
+                      const currentCount = selectedOptions.filter((o) => o.groupId === group.id).length;
                       const maxReached = group.selection_type === 'multiple' 
                         ? currentCount >= group.max_selections && !isSelected
                         : currentCount >= 2 && !isSelected;
-
-                      const handleToggle = () => {
-                        if (maxReached && !isSelected) return;
-                        if (group.selection_type === 'half_half') {
-                          handleHalfHalfToggle(group, option, !isSelected);
-                        } else {
-                          handleMultipleToggle(group, option, !isSelected);
-                        }
-                      };
 
                       return (
                         <button
                           type="button"
                           key={option.id}
-                          onClick={handleToggle}
-                          disabled={maxReached && !isSelected}
+                          onClick={() => {
+                            const currentlySelected = selectedOptions.some((o) => o.optionId === option.id);
+                            
+                            if (currentlySelected) {
+                              // Deselect
+                              setSelectedOptions(prev => prev.filter((o) => o.optionId !== option.id));
+                            } else {
+                              // Select - check max first
+                              const groupCount = selectedOptions.filter((o) => o.groupId === group.id).length;
+                              const maxAllowed = group.selection_type === 'half_half' ? 2 : group.max_selections;
+                              
+                              if (groupCount >= maxAllowed) {
+                                return; // Max reached
+                              }
+                              
+                              const priceModifier = group.selection_type === 'half_half' 
+                                ? option.price_modifier / 2 
+                                : option.price_modifier;
+                              
+                              setSelectedOptions(prev => [
+                                ...prev,
+                                {
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                  optionId: option.id,
+                                  name: option.name,
+                                  priceModifier,
+                                },
+                              ]);
+                            }
+                          }}
+                          disabled={maxReached}
                           className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
                             isSelected 
                               ? 'border-primary bg-primary/10 shadow-sm' 
                               : 'border-border hover:border-primary/30 hover:bg-muted/50'
-                          } ${maxReached && !isSelected ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                          } ${maxReached ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
