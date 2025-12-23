@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   Star,
+  Settings2,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { ProductOptionsEditor } from '@/components/menu/ProductOptionsEditor';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -115,6 +117,13 @@ export default function MenuManagement() {
     id: string;
     name: string;
   } | null>(null);
+
+  // Product Options Editor
+  const [optionsEditor, setOptionsEditor] = useState<{
+    open: boolean;
+    productId: string;
+    productName: string;
+  }>({ open: false, productId: '', productName: '' });
 
   useEffect(() => {
     loadCompanyAndData();
@@ -491,6 +500,16 @@ export default function MenuManagement() {
                                   <Star className={`h-4 w-4 mr-2 ${product.is_featured ? 'fill-current' : ''}`} />
                                   {product.is_featured ? 'Remover destaque' : 'Destacar'}
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setOptionsEditor({
+                                    open: true,
+                                    productId: product.id,
+                                    productName: product.name,
+                                  })}
+                                >
+                                  <Settings2 className="h-4 w-4 mr-2" />
+                                  Opções / Adicionais
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -818,6 +837,14 @@ export default function MenuManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Product Options Editor */}
+      <ProductOptionsEditor
+        productId={optionsEditor.productId}
+        productName={optionsEditor.productName}
+        open={optionsEditor.open}
+        onClose={() => setOptionsEditor({ open: false, productId: '', productName: '' })}
+      />
     </DashboardLayout>
   );
 }

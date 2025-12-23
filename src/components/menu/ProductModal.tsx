@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Minus, Plus, X, Trash2, ArrowLeft, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,13 +10,32 @@ import {
 } from '@/components/ui/dialog';
 import { useCart } from '@/hooks/useCart';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProductOption {
   id: string;
   name: string;
+  description?: string | null;
   price_modifier: number;
   is_required: boolean;
+  is_available?: boolean;
+  sort_order?: number;
+  group_id?: string | null;
+}
+
+interface OptionGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  min_selections: number;
+  max_selections: number;
+  selection_type: string;
+  sort_order: number;
+  options: ProductOption[];
 }
 
 interface Product {
@@ -34,35 +53,215 @@ interface ProductModalProps {
   onClose: () => void;
 }
 
+interface SelectedOption {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  name: string;
+  priceModifier: number;
+}
+
 export function ProductModal({ product, open, onClose }: ProductModalProps) {
   const { addItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
-  const [selectedOptions, setSelectedOptions] = useState<{ name: string; priceModifier: number }[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<SelectedOption[]>([]);
+  const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && product) {
+      loadOptionGroups();
+    }
+  }, [open, product?.id]);
+
+  const loadOptionGroups = async () => {
+    if (!product) return;
+
+    setLoading(true);
+    try {
+      // Load option groups
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('product_option_groups')
+        .select('*')
+        .eq('product_id', product.id)
+        .order('sort_order');
+
+      if (groupsError) throw groupsError;
+
+      // Load options
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('product_options')
+        .select('*')
+        .eq('product_id', product.id)
+        .eq('is_available', true)
+        .order('sort_order');
+
+      if (optionsError) throw optionsError;
+
+      // Group options
+      const groups: OptionGroup[] = (groupsData || []).map((group) => ({
+        ...group,
+        options: (optionsData || []).filter((opt) => opt.group_id === group.id),
+      }));
+
+      // Add ungrouped options (legacy)
+      const ungroupedOptions = (optionsData || []).filter((opt) => !opt.group_id);
+      if (ungroupedOptions.length > 0) {
+        groups.push({
+          id: 'ungrouped',
+          name: 'Adicionais',
+          description: null,
+          is_required: false,
+          min_selections: 0,
+          max_selections: ungroupedOptions.length,
+          selection_type: 'multiple',
+          sort_order: 999,
+          options: ungroupedOptions,
+        });
+      }
+
+      setOptionGroups(groups);
+    } catch (error) {
+      console.error('Error loading options:', error);
+      // Fallback to legacy options from product prop
+      if (product.product_options && product.product_options.length > 0) {
+        setOptionGroups([{
+          id: 'legacy',
+          name: 'Adicionais',
+          description: null,
+          is_required: false,
+          min_selections: 0,
+          max_selections: product.product_options.length,
+          selection_type: 'multiple',
+          sort_order: 0,
+          options: product.product_options.map(opt => ({
+            ...opt,
+            description: null,
+            is_available: true,
+            sort_order: 0,
+            group_id: 'legacy',
+          })),
+        }]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!product) return null;
 
-  const handleOptionToggle = (option: ProductOption, checked: boolean) => {
+  const handleSingleSelect = (group: OptionGroup, option: ProductOption) => {
+    // Remove any existing selection from this group
+    const filtered = selectedOptions.filter((o) => o.groupId !== group.id);
+    // Add new selection
+    setSelectedOptions([
+      ...filtered,
+      {
+        groupId: group.id,
+        groupName: group.name,
+        optionId: option.id,
+        name: option.name,
+        priceModifier: option.price_modifier,
+      },
+    ]);
+  };
+
+  const handleMultipleToggle = (group: OptionGroup, option: ProductOption, checked: boolean) => {
     if (checked) {
-      setSelectedOptions((prev) => [
-        ...prev,
-        { name: option.name, priceModifier: option.price_modifier },
+      // Check max selections
+      const currentCount = selectedOptions.filter((o) => o.groupId === group.id).length;
+      if (currentCount >= group.max_selections) {
+        return; // Max reached
+      }
+      setSelectedOptions([
+        ...selectedOptions,
+        {
+          groupId: group.id,
+          groupName: group.name,
+          optionId: option.id,
+          name: option.name,
+          priceModifier: option.price_modifier,
+        },
       ]);
     } else {
-      setSelectedOptions((prev) => prev.filter((o) => o.name !== option.name));
+      setSelectedOptions(selectedOptions.filter((o) => o.optionId !== option.id));
     }
+  };
+
+  const handleHalfHalfToggle = (group: OptionGroup, option: ProductOption, checked: boolean) => {
+    // Half-half allows exactly 2 selections
+    if (checked) {
+      const currentCount = selectedOptions.filter((o) => o.groupId === group.id).length;
+      if (currentCount >= 2) {
+        // Remove oldest and add new
+        const filtered = selectedOptions.filter((o) => o.groupId !== group.id);
+        const existing = selectedOptions.filter((o) => o.groupId === group.id);
+        setSelectedOptions([
+          ...filtered,
+          existing[1], // Keep second selection
+          {
+            groupId: group.id,
+            groupName: group.name,
+            optionId: option.id,
+            name: option.name,
+            priceModifier: option.price_modifier / 2, // Half price for half-half
+          },
+        ]);
+      } else {
+        setSelectedOptions([
+          ...selectedOptions,
+          {
+            groupId: group.id,
+            groupName: group.name,
+            optionId: option.id,
+            name: option.name,
+            priceModifier: option.price_modifier / 2, // Half price
+          },
+        ]);
+      }
+    } else {
+      setSelectedOptions(selectedOptions.filter((o) => o.optionId !== option.id));
+    }
+  };
+
+  const isOptionSelected = (optionId: string) => {
+    return selectedOptions.some((o) => o.optionId === optionId);
+  };
+
+  const getGroupSelectionCount = (groupId: string) => {
+    return selectedOptions.filter((o) => o.groupId === groupId).length;
+  };
+
+  const validateRequiredGroups = () => {
+    for (const group of optionGroups) {
+      if (group.is_required) {
+        const count = getGroupSelectionCount(group.id);
+        if (count < (group.min_selections || 1)) {
+          return false;
+        }
+      }
+    }
+    return true;
   };
 
   const optionsTotal = selectedOptions.reduce((sum, opt) => sum + opt.priceModifier, 0);
   const itemTotal = (product.price + optionsTotal) * quantity;
 
   const handleAddToCart = () => {
+    if (!validateRequiredGroups()) {
+      return;
+    }
+
     addItem({
       productId: product.id,
       productName: product.name,
       price: product.price,
       quantity,
-      options: selectedOptions,
+      options: selectedOptions.map((o) => ({
+        name: o.name,
+        priceModifier: o.priceModifier,
+      })),
       notes: notes || undefined,
       imageUrl: product.image_url || undefined,
     });
@@ -73,8 +272,11 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
     setQuantity(1);
     setNotes('');
     setSelectedOptions([]);
+    setOptionGroups([]);
     onClose();
   };
+
+  const canAddToCart = validateRequiredGroups();
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -101,34 +303,119 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
           R$ {product.price.toFixed(2)}
         </div>
 
-        {/* Options */}
-        {product.product_options && product.product_options.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="font-medium">Adicionais</h4>
-            {product.product_options.map((option) => (
-              <div
-                key={option.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id={option.id}
-                    checked={selectedOptions.some(o => o.name === option.name)}
-                    onCheckedChange={(checked) =>
-                      handleOptionToggle(option, checked as boolean)
-                    }
-                  />
-                  <Label htmlFor={option.id} className="cursor-pointer">
-                    {option.name}
-                    {option.is_required && (
-                      <span className="text-destructive ml-1">*</span>
+        {/* Option Groups */}
+        {optionGroups.length > 0 && (
+          <div className="space-y-6">
+            {optionGroups.map((group) => (
+              <div key={group.id} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">{group.name}</h4>
+                    {group.description && (
+                      <p className="text-xs text-muted-foreground">{group.description}</p>
                     )}
-                  </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {group.is_required && (
+                      <Badge variant="destructive" className="text-xs">Obrigatório</Badge>
+                    )}
+                    {group.selection_type === 'multiple' && group.max_selections > 1 && (
+                      <Badge variant="outline" className="text-xs">
+                        {getGroupSelectionCount(group.id)}/{group.max_selections}
+                      </Badge>
+                    )}
+                    {group.selection_type === 'half_half' && (
+                      <Badge variant="outline" className="text-xs">
+                        Meio a meio ({getGroupSelectionCount(group.id)}/2)
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                {option.price_modifier > 0 && (
-                  <span className="text-sm font-medium text-primary">
-                    +R$ {option.price_modifier.toFixed(2)}
-                  </span>
+
+                {/* Single Selection (Radio) */}
+                {group.selection_type === 'single' && (
+                  <RadioGroup
+                    value={selectedOptions.find((o) => o.groupId === group.id)?.optionId || ''}
+                    onValueChange={(value) => {
+                      const option = group.options.find((o) => o.id === value);
+                      if (option) handleSingleSelect(group, option);
+                    }}
+                  >
+                    {group.options.map((option) => (
+                      <div
+                        key={option.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <RadioGroupItem value={option.id} id={option.id} />
+                          <Label htmlFor={option.id} className="cursor-pointer flex-1">
+                            <span>{option.name}</span>
+                            {option.description && (
+                              <span className="block text-xs text-muted-foreground">{option.description}</span>
+                            )}
+                          </Label>
+                        </div>
+                        {option.price_modifier !== 0 && (
+                          <span className={`text-sm font-medium ${option.price_modifier > 0 ? 'text-primary' : 'text-success'}`}>
+                            {option.price_modifier > 0 ? '+' : ''}R$ {option.price_modifier.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </RadioGroup>
+                )}
+
+                {/* Multiple Selection (Checkbox) */}
+                {(group.selection_type === 'multiple' || group.selection_type === 'half_half') && (
+                  <div className="space-y-2">
+                    {group.options.map((option) => {
+                      const isSelected = isOptionSelected(option.id);
+                      const currentCount = getGroupSelectionCount(group.id);
+                      const maxReached = group.selection_type === 'multiple' 
+                        ? currentCount >= group.max_selections && !isSelected
+                        : currentCount >= 2 && !isSelected;
+
+                      return (
+                        <div
+                          key={option.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                            isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+                          } ${maxReached ? 'opacity-50' : ''}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Checkbox
+                              id={option.id}
+                              checked={isSelected}
+                              disabled={maxReached}
+                              onCheckedChange={(checked) => {
+                                if (group.selection_type === 'half_half') {
+                                  handleHalfHalfToggle(group, option, checked as boolean);
+                                } else {
+                                  handleMultipleToggle(group, option, checked as boolean);
+                                }
+                              }}
+                            />
+                            <Label htmlFor={option.id} className="cursor-pointer flex-1">
+                              <span>{option.name}</span>
+                              {option.description && (
+                                <span className="block text-xs text-muted-foreground">{option.description}</span>
+                              )}
+                            </Label>
+                          </div>
+                          {option.price_modifier !== 0 && (
+                            <span className={`text-sm font-medium ${option.price_modifier > 0 ? 'text-primary' : 'text-success'}`}>
+                              {option.price_modifier > 0 ? '+' : ''}R$ {
+                                group.selection_type === 'half_half' 
+                                  ? (option.price_modifier / 2).toFixed(2) 
+                                  : option.price_modifier.toFixed(2)
+                              }
+                              {group.selection_type === 'half_half' && ' (½)'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             ))}
@@ -172,6 +459,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
           <Button
             className="flex-1 gradient-primary text-primary-foreground"
             onClick={handleAddToCart}
+            disabled={!canAddToCart}
           >
             Adicionar R$ {itemTotal.toFixed(2)}
           </Button>
