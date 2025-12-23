@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Package,
@@ -11,6 +11,7 @@ import {
   ChefHat,
   CircleCheck,
   XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 interface Order {
   id: string;
@@ -61,15 +63,10 @@ export default function OrderTracking() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  useEffect(() => {
-    if (orderId) {
-      loadOrder();
-      subscribeToUpdates();
-    }
-  }, [orderId]);
-
-  const loadOrder = async () => {
+  const loadOrder = useCallback(async () => {
     if (!orderId) return;
 
     try {
@@ -99,17 +96,24 @@ export default function OrderTracking() {
         company: orderData.company as Order['company'],
         items: itemsData || [],
       });
+      setLastUpdate(new Date());
     } catch (err: any) {
       console.error('Error loading order:', err);
       setError('Erro ao carregar pedido');
     } finally {
       setLoading(false);
+      setIsUpdating(false);
     }
-  };
+  }, [orderId]);
 
-  const subscribeToUpdates = () => {
+  useEffect(() => {
+    if (!orderId) return;
+    
+    loadOrder();
+    
+    // Subscribe to realtime updates
     const channel = supabase
-      .channel(`order-${orderId}`)
+      .channel(`order-tracking-${orderId}`)
       .on(
         'postgres_changes',
         {
@@ -119,16 +123,34 @@ export default function OrderTracking() {
           filter: `id=eq.${orderId}`,
         },
         (payload) => {
-          console.log('Order updated:', payload);
+          console.log('Order updated in realtime:', payload);
+          setIsUpdating(true);
+          
+          const newStatus = payload.new.status as string;
+          const oldStatus = payload.old?.status as string;
+          
+          if (newStatus !== oldStatus) {
+            const statusInfo = statusConfig[newStatus];
+            if (statusInfo) {
+              toast.info(`Status atualizado: ${statusInfo.label}`, {
+                icon: <statusInfo.icon className="h-4 w-4" style={{ color: statusInfo.color }} />,
+                duration: 5000,
+              });
+            }
+          }
+          
           loadOrder();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
 
     return () => {
+      console.log('Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
-  };
+  }, [orderId, loadOrder]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -194,10 +216,13 @@ export default function OrderTracking() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Status Card */}
-        <Card>
+        <Card className={isUpdating ? 'animate-pulse' : ''}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Status do Pedido</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">Status do Pedido</CardTitle>
+                {isUpdating && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
               <Badge
                 style={{
                   backgroundColor: `${currentStatus.color}20`,
@@ -209,6 +234,9 @@ export default function OrderTracking() {
                 {currentStatus.label}
               </Badge>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Última atualização: {format(lastUpdate, "HH:mm:ss", { locale: ptBR })}
+            </p>
           </CardHeader>
           <CardContent>
             {/* Progress Steps */}
