@@ -18,6 +18,7 @@ import CouponsManagement from "./pages/store/CouponsManagement";
 import UserSettings from "./pages/store/UserSettings";
 import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
+import OrderHistory from "./pages/OrderHistory";
 import DriverDashboard from "./pages/DriverDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/menu/:slug" element={<PublicMenu />} />
             <Route path="/track/:orderId" element={<OrderTracking />} />
+            <Route path="/orders" element={<OrderHistory />} />
             <Route
               path="/dashboard"
               element={
