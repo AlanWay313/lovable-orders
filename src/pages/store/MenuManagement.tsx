@@ -755,14 +755,14 @@ export default function MenuManagement() {
             <div className="space-y-2">
               <Label>Categoria</Label>
               <Select
-                value={productForm.category_id}
-                onValueChange={(value) => setProductForm({ ...productForm, category_id: value })}
+                value={productForm.category_id || "none"}
+                onValueChange={(value) => setProductForm({ ...productForm, category_id: value === "none" ? "" : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem categoria</SelectItem>
+                  <SelectItem value="none">Sem categoria</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}
