@@ -13,6 +13,7 @@ import AdminCompanies from "./pages/admin/AdminCompanies";
 import StoreSettings from "./pages/store/StoreSettings";
 import MenuManagement from "./pages/store/MenuManagement";
 import OrdersManagement from "./pages/store/OrdersManagement";
+import DriversManagement from "./pages/store/DriversManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <OrdersManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/drivers"
+              element={
+                <ProtectedRoute>
+                  <DriversManagement />
                 </ProtectedRoute>
               }
             />
