@@ -113,6 +113,7 @@ export default function DriversManagement() {
   const { toast } = useToast();
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +147,7 @@ export default function DriversManagement() {
       // Get company
       const { data: company, error: companyError } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', user.id)
         .maybeSingle();
 
@@ -157,6 +158,7 @@ export default function DriversManagement() {
       }
 
       setCompanyId(company.id);
+      setCompanyName(company.name);
 
       // Load drivers
       const { data: driversData, error: driversError } = await supabase
@@ -236,9 +238,25 @@ export default function DriversManagement() {
 
       if (driverError) throw driverError;
 
+      // Send welcome email to driver
+      const loginUrl = `${window.location.origin}/driver/login`;
+      try {
+        await supabase.functions.invoke('send-driver-welcome', {
+          body: {
+            driverName: newDriverName,
+            driverEmail: newDriverEmail.toLowerCase().trim(),
+            companyName: companyName,
+            loginUrl: loginUrl,
+          },
+        });
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError);
+        // Don't block the flow if email fails
+      }
+
       toast({
         title: 'Entregador adicionado',
-        description: `${newDriverName} foi cadastrado. Ele pode acessar pelo email ${newDriverEmail}`,
+        description: `${newDriverName} foi cadastrado e notificado por email.`,
       });
 
       setShowAddDriver(false);
