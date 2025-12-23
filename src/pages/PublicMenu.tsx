@@ -34,6 +34,8 @@ interface Company {
   delivery_fee: number;
   min_order_value: number;
   primary_color: string | null;
+  pix_key: string | null;
+  pix_key_type: string | null;
 }
 
 interface Category {
@@ -194,6 +196,8 @@ function PublicMenuContent() {
         deliveryFee={Number(company.delivery_fee) || 0}
         onBack={() => setCheckoutMode(false)}
         isStoreOpen={company.is_open}
+        pixKey={company.pix_key}
+        pixKeyType={company.pix_key_type}
       />
     );
   }
