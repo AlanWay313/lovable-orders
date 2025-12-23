@@ -34,7 +34,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { supabase } from '@/integrations/supabase/client';
+import { SubscriptionAlert } from '@/components/SubscriptionAlert';
 import { Database } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -104,6 +106,7 @@ const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready',
 export default function OrdersManagement() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { status: subscriptionStatus } = useSubscriptionStatus();
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -340,6 +343,19 @@ export default function OrdersManagement() {
             </Button>
           </div>
         </div>
+
+        {/* Subscription Alert */}
+        {subscriptionStatus && (subscriptionStatus.isNearLimit || subscriptionStatus.isAtLimit) && (
+          <SubscriptionAlert
+            plan={subscriptionStatus.plan}
+            orderLimit={subscriptionStatus.orderLimit}
+            monthlyOrderCount={subscriptionStatus.monthlyOrderCount}
+            displayName={subscriptionStatus.displayName}
+            isNearLimit={subscriptionStatus.isNearLimit}
+            isAtLimit={subscriptionStatus.isAtLimit}
+            usagePercentage={subscriptionStatus.usagePercentage}
+          />
+        )}
 
         {/* Tabs */}
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>

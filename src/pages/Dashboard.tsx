@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { useReportExport } from '@/hooks/useReportExport';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import {
   ShoppingBag,
   TrendingUp,
@@ -23,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
+import { SubscriptionAlert } from '@/components/SubscriptionAlert';
 import {
   AreaChart,
   Area,
@@ -129,6 +131,7 @@ const periodCompareLabels: Record<PeriodFilter, string> = {
 export default function Dashboard() {
   const { user, hasRole } = useAuth();
   const { exportToPDF, exportToExcel } = useReportExport();
+  const { status: subscriptionStatus } = useSubscriptionStatus();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -486,6 +489,19 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Subscription Alert */}
+        {subscriptionStatus && (subscriptionStatus.isNearLimit || subscriptionStatus.isAtLimit) && (
+          <SubscriptionAlert
+            plan={subscriptionStatus.plan}
+            orderLimit={subscriptionStatus.orderLimit}
+            monthlyOrderCount={subscriptionStatus.monthlyOrderCount}
+            displayName={subscriptionStatus.displayName}
+            isNearLimit={subscriptionStatus.isNearLimit}
+            isAtLimit={subscriptionStatus.isAtLimit}
+            usagePercentage={subscriptionStatus.usagePercentage}
+          />
+        )}
 
         {/* Stats grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

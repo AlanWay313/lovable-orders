@@ -7,11 +7,13 @@ import {
   Zap,
   Building2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -238,8 +240,14 @@ export default function PlansPage() {
 
         {/* Current Usage */}
         {company && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="py-4">
+          <Card className={`border-primary/20 ${
+            orderLimit !== -1 && (orderCount / orderLimit) >= 1 
+              ? 'border-destructive/50 bg-destructive/5' 
+              : orderLimit !== -1 && (orderCount / orderLimit) >= 0.8 
+                ? 'border-warning/50 bg-warning/5'
+                : 'bg-primary/5'
+          }`}>
+            <CardContent className="py-4 space-y-3">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Uso atual do mês</p>
@@ -259,6 +267,35 @@ export default function PlansPage() {
                   )}
                 </div>
               </div>
+              
+              {orderLimit !== -1 && (
+                <>
+                  <Progress
+                    value={Math.min((orderCount / orderLimit) * 100, 100)}
+                    className={`h-2 ${
+                      (orderCount / orderLimit) >= 1 
+                        ? '[&>div]:bg-destructive' 
+                        : (orderCount / orderLimit) >= 0.8 
+                          ? '[&>div]:bg-warning'
+                          : ''
+                    }`}
+                  />
+                  
+                  {(orderCount / orderLimit) >= 1 && (
+                    <div className="flex items-center gap-2 text-destructive text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Limite atingido! Sua loja não pode receber novos pedidos.</span>
+                    </div>
+                  )}
+                  
+                  {(orderCount / orderLimit) >= 0.8 && (orderCount / orderLimit) < 1 && (
+                    <div className="flex items-center gap-2 text-warning text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Você está próximo do limite mensal. Considere fazer upgrade.</span>
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         )}
