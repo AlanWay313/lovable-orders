@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.send-driver-welcome]
 verify_jwt = false
+
+[functions.validate-driver-email]
+verify_jwt = false
+
+[functions.send-driver-otp]
+verify_jwt = false
