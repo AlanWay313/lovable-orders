@@ -41,13 +41,30 @@ const DEFAULT_HOURS: OperatingHours = {
   sunday: { enabled: false, open: '08:00', close: '14:00' },
 };
 
+// Helper to ensure all days have valid data by merging with defaults
+function ensureValidHours(input: Partial<OperatingHours> | null | undefined): OperatingHours {
+  if (!input || typeof input !== 'object') {
+    return DEFAULT_HOURS;
+  }
+  
+  return {
+    monday: { ...DEFAULT_HOURS.monday, ...(input.monday || {}) },
+    tuesday: { ...DEFAULT_HOURS.tuesday, ...(input.tuesday || {}) },
+    wednesday: { ...DEFAULT_HOURS.wednesday, ...(input.wednesday || {}) },
+    thursday: { ...DEFAULT_HOURS.thursday, ...(input.thursday || {}) },
+    friday: { ...DEFAULT_HOURS.friday, ...(input.friday || {}) },
+    saturday: { ...DEFAULT_HOURS.saturday, ...(input.saturday || {}) },
+    sunday: { ...DEFAULT_HOURS.sunday, ...(input.sunday || {}) },
+  };
+}
+
 interface OperatingHoursEditorProps {
   value: OperatingHours | null;
   onChange: (hours: OperatingHours) => void;
 }
 
 export function OperatingHoursEditor({ value, onChange }: OperatingHoursEditorProps) {
-  const hours = value || DEFAULT_HOURS;
+  const hours = ensureValidHours(value);
 
   const updateDay = (dayKey: keyof OperatingHours, field: keyof DayHours, fieldValue: boolean | string) => {
     onChange({
