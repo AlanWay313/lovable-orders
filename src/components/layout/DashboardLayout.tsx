@@ -35,8 +35,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Minha Loja', href: '/dashboard/store', icon: Store, roles: ['store_owner'] },
-  { label: 'Cardápio', href: '/dashboard/menu', icon: UtensilsCrossed, roles: ['store_owner'] },
+  { label: 'Minha Loja', href: '/dashboard/store', icon: Store },
+  { label: 'Cardápio', href: '/dashboard/menu', icon: UtensilsCrossed },
   { label: 'Pedidos', href: '/dashboard/orders', icon: ShoppingBag, roles: ['store_owner', 'delivery_driver'] },
   { label: 'Entregas', href: '/dashboard/deliveries', icon: Truck, roles: ['store_owner', 'delivery_driver'] },
   { label: 'Entregadores', href: '/dashboard/drivers', icon: Users, roles: ['store_owner'] },

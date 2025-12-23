@@ -10,6 +10,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import PublicMenu from "./pages/PublicMenu";
 import AdminCompanies from "./pages/admin/AdminCompanies";
+import StoreSettings from "./pages/store/StoreSettings";
+import MenuManagement from "./pages/store/MenuManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/store"
+              element={
+                <ProtectedRoute>
+                  <StoreSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/menu"
+              element={
+                <ProtectedRoute>
+                  <MenuManagement />
                 </ProtectedRoute>
               }
             />
