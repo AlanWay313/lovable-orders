@@ -19,6 +19,7 @@ import UserSettings from "./pages/store/UserSettings";
 import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
 import OrderHistory from "./pages/OrderHistory";
+import DriverLogin from "./pages/DriverLogin";
 import DriverDashboard from "./pages/DriverDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -109,6 +110,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/driver/login" element={<DriverLogin />} />
             <Route
               path="/driver"
               element={
