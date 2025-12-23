@@ -67,16 +67,15 @@ export default function DriverLogin() {
     setLoading(true);
 
     try {
-      // First verify if this email is registered as a driver
-      const { data: driver, error: driverError } = await supabase
-        .from('delivery_drivers')
-        .select('id, driver_name, is_active')
-        .eq('email', email.toLowerCase().trim())
-        .maybeSingle();
+      // Use edge function to validate driver email (bypasses RLS)
+      const { data: validationData, error: validationError } = await supabase.functions.invoke(
+        'validate-driver-email',
+        { body: { email: email.toLowerCase().trim() } }
+      );
 
-      if (driverError) throw driverError;
+      if (validationError) throw validationError;
 
-      if (!driver) {
+      if (!validationData.valid) {
         toast.error('Email não encontrado', {
           description: 'Este email não está cadastrado como entregador.',
         });
@@ -84,7 +83,7 @@ export default function DriverLogin() {
         return;
       }
 
-      if (!driver.is_active) {
+      if (!validationData.isActive) {
         toast.error('Conta desativada', {
           description: 'Sua conta de entregador está desativada. Entre em contato com o estabelecimento.',
         });
@@ -92,16 +91,13 @@ export default function DriverLogin() {
         return;
       }
 
-      // Send OTP via Supabase Auth - redirect to driver area if magic link is clicked
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.toLowerCase().trim(),
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/driver`,
-        },
-      });
+      // Send OTP and custom email via edge function
+      const { data: otpData, error: otpError } = await supabase.functions.invoke(
+        'send-driver-otp',
+        { body: { email: email.toLowerCase().trim() } }
+      );
 
-      if (error) throw error;
+      if (otpError) throw otpError;
 
       toast.success('Código enviado!', {
         description: `Verifique sua caixa de entrada em ${email}`,
@@ -151,12 +147,11 @@ export default function DriverLogin() {
   const handleResendOTP = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.toLowerCase().trim(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/driver`,
-        },
-      });
+      // Resend OTP via edge function
+      const { error } = await supabase.functions.invoke(
+        'send-driver-otp',
+        { body: { email: email.toLowerCase().trim() } }
+      );
 
       if (error) throw error;
 
