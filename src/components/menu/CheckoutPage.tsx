@@ -73,9 +73,18 @@ interface CheckoutPageProps {
   deliveryFee: number;
   onBack: () => void;
   isStoreOpen?: boolean;
+  pixKey?: string | null;
+  pixKeyType?: string | null;
 }
 
-export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isStoreOpen = true }: CheckoutPageProps) {
+interface OrderSummary {
+  subtotal: number;
+  discountAmount: number;
+  deliveryFee: number;
+  total: number;
+}
+
+export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCart();
@@ -84,6 +93,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
   const [loadingCep, setLoadingCep] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderSummary, setOrderSummary] = useState<OrderSummary | null>(null);
   
   // Coupon state
   const [couponCode, setCouponCode] = useState('');
@@ -354,7 +364,13 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         }
       }
 
-      // Success for non-online payments
+      // Success for non-online payments - save order summary before clearing cart
+      setOrderSummary({
+        subtotal,
+        discountAmount,
+        deliveryFee,
+        total,
+      });
       setOrderId(orderData.id);
       setOrderComplete(true);
       clearCart();
@@ -391,21 +407,21 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>R$ {subtotal.toFixed(2)}</span>
+                <span>R$ {(orderSummary?.subtotal ?? 0).toFixed(2)}</span>
               </div>
-              {discountAmount > 0 && (
+              {(orderSummary?.discountAmount ?? 0) > 0 && (
                 <div className="flex justify-between text-success">
                   <span>Desconto</span>
-                  <span>-R$ {discountAmount.toFixed(2)}</span>
+                  <span>-R$ {(orderSummary?.discountAmount ?? 0).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Entrega</span>
-                <span>R$ {deliveryFee.toFixed(2)}</span>
+                <span>R$ {(orderSummary?.deliveryFee ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold pt-2 border-t border-border">
                 <span>Total</span>
-                <span className="text-primary">R$ {total.toFixed(2)}</span>
+                <span className="text-primary">R$ {(orderSummary?.total ?? 0).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -721,6 +737,30 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
                 <span>Cartão online</span>
               </Label>
             </RadioGroup>
+
+            {/* PIX key display */}
+            {paymentMethod === 'pix' && pixKey && (
+              <div className="mt-4 p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Chave PIX para pagamento:</span>
+                </div>
+                <div className="bg-background rounded-lg p-3 border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {pixKeyType === 'cpf' && 'CPF'}
+                    {pixKeyType === 'cnpj' && 'CNPJ'}
+                    {pixKeyType === 'email' && 'Email'}
+                    {pixKeyType === 'phone' && 'Telefone'}
+                    {pixKeyType === 'random' && 'Chave Aleatória'}
+                    {!pixKeyType && 'Chave'}
+                  </p>
+                  <p className="font-mono text-sm break-all select-all">{pixKey}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Realize o pagamento via PIX após confirmar o pedido
+                </p>
+              </div>
+            )}
 
             {/* Cash change option */}
             {paymentMethod === 'cash' && (
