@@ -21,6 +21,9 @@ import { ProductModal, CartDrawer } from '@/components/menu/ProductModal';
 import { CheckoutPage } from '@/components/menu/CheckoutPage';
 import { TrackOrderModal } from '@/components/menu/TrackOrderModal';
 import { cn } from '@/lib/utils';
+import { checkStoreOpen, formatTodayHours } from '@/lib/storeHours';
+import { OperatingHours } from '@/components/store/OperatingHoursEditor';
+import { Json } from '@/integrations/supabase/types';
 
 interface Company {
   id: string;
@@ -38,6 +41,7 @@ interface Company {
   primary_color: string | null;
   pix_key: string | null;
   pix_key_type: string | null;
+  opening_hours: Json | null;
 }
 
 interface Category {
@@ -153,6 +157,12 @@ function PublicMenuContent() {
   // Featured products
   const featuredProducts = products.filter((p) => p.is_featured);
 
+  // Check if store is actually open (manual toggle + operating hours)
+  const openingHours = company?.opening_hours as unknown as OperatingHours | null;
+  const storeStatus = company ? checkStoreOpen(company.is_open, openingHours) : null;
+  const isActuallyOpen = storeStatus?.isOpen ?? false;
+  const todayHours = company ? formatTodayHours(openingHours) : null;
+
   // Get beverages for suggestions (look for category with "bebida" in name)
   const beverageCategory = categories.find(c => 
     c.name.toLowerCase().includes('bebida') || 
@@ -199,7 +209,7 @@ function PublicMenuContent() {
         deliveryFee={Number(company.delivery_fee) || 0}
         minOrderValue={Number(company.min_order_value) || 0}
         onBack={() => setCheckoutMode(false)}
-        isStoreOpen={company.is_open}
+        isStoreOpen={isActuallyOpen}
         pixKey={company.pix_key}
         pixKeyType={company.pix_key_type}
       />
@@ -249,14 +259,20 @@ function PublicMenuContent() {
                   )}
                 </div>
                 <Badge
-                  variant={company.is_open ? 'default' : 'secondary'}
-                  className={company.is_open ? 'bg-success text-success-foreground' : ''}
+                  variant={isActuallyOpen ? 'default' : 'secondary'}
+                  className={isActuallyOpen ? 'bg-success text-success-foreground' : ''}
                 >
-                  {company.is_open ? 'Aberto' : 'Fechado'}
+                  {isActuallyOpen ? 'Aberto' : 'Fechado'}
                 </Badge>
               </div>
 
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
+                {todayHours && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {todayHours}
+                  </div>
+                )}
                 {company.address && (
                   <div className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />
@@ -294,12 +310,18 @@ function PublicMenuContent() {
       </div>
 
       {/* Closed Store Warning */}
-      {!company.is_open && (
+      {!isActuallyOpen && (
         <div className="container mt-4">
           <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
             <p className="text-sm text-destructive font-medium">
-              Esta loja está fechada no momento. Você pode ver o cardápio, mas não pode fazer pedidos.
+              {storeStatus?.reason === 'manual_closed' && 'Esta loja está fechada no momento.'}
+              {storeStatus?.reason === 'day_closed' && 'Esta loja não abre hoje.'}
+              {storeStatus?.reason === 'outside_hours' && 'Esta loja está fora do horário de funcionamento.'}
+              {' '}Você pode ver o cardápio, mas não pode fazer pedidos.
             </p>
+            {storeStatus?.nextOpenTime && (
+              <p className="text-xs text-muted-foreground mt-1">{storeStatus.nextOpenTime}</p>
+            )}
           </div>
         </div>
       )}
@@ -450,7 +472,7 @@ function PublicMenuContent() {
           price: Number(p.price),
           image_url: p.image_url
         }))}
-        isStoreOpen={company.is_open}
+        isStoreOpen={isActuallyOpen}
       />
 
       {/* Track Order Modal */}
