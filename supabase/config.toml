@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.verify-payment]
 verify_jwt = false
+
+[functions.create-subscription]
+verify_jwt = false
+
+[functions.check-subscription]
+verify_jwt = false
+
+[functions.customer-portal]
+verify_jwt = false

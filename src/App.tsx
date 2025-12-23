@@ -16,6 +16,7 @@ import OrdersManagement from "./pages/store/OrdersManagement";
 import DriversManagement from "./pages/store/DriversManagement";
 import CouponsManagement from "./pages/store/CouponsManagement";
 import UserSettings from "./pages/store/UserSettings";
+import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
 import NotFound from "./pages/NotFound";
 
@@ -86,6 +87,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <UserSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/plans"
+              element={
+                <ProtectedRoute>
+                  <PlansPage />
                 </ProtectedRoute>
               }
             />

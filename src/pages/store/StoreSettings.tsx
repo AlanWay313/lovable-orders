@@ -43,6 +43,8 @@ const companySchema = z.object({
   minOrderValue: z.coerce.number().min(0).default(0),
   primaryColor: z.string().default('#10B981'),
   secondaryColor: z.string().default('#059669'),
+  pixKey: z.string().max(100).optional(),
+  pixKeyType: z.enum(['cpf', 'cnpj', 'email', 'phone', 'random']).optional(),
 });
 
 type CompanyFormData = z.infer<typeof companySchema>;
@@ -66,6 +68,11 @@ interface Company {
   secondary_color: string | null;
   is_open: boolean;
   status: string;
+  pix_key: string | null;
+  pix_key_type: string | null;
+  subscription_status: string | null;
+  subscription_plan: string | null;
+  monthly_order_count: number | null;
 }
 
 export default function StoreSettings() {
@@ -127,6 +134,8 @@ export default function StoreSettings() {
           minOrderValue: Number(data.min_order_value) || 0,
           primaryColor: data.primary_color || '#10B981',
           secondaryColor: data.secondary_color || '#059669',
+          pixKey: data.pix_key || '',
+          pixKeyType: (data.pix_key_type as any) || undefined,
         });
       }
     } catch (error: any) {
@@ -164,6 +173,8 @@ export default function StoreSettings() {
         primary_color: data.primaryColor,
         secondary_color: data.secondaryColor,
         is_open: isOpen,
+        pix_key: data.pixKey || null,
+        pix_key_type: data.pixKeyType || null,
       };
 
       if (company) {
@@ -512,6 +523,46 @@ export default function StoreSettings() {
                     min="0"
                     placeholder="0.00"
                     {...register('minOrderValue')}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* PIX Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-display flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-primary" />
+                Configuração PIX
+              </CardTitle>
+              <CardDescription>
+                Configure sua chave PIX para receber pagamentos
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="pixKeyType">Tipo de Chave</Label>
+                  <select
+                    id="pixKeyType"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {...register('pixKeyType')}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="cpf">CPF</option>
+                    <option value="cnpj">CNPJ</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Telefone</option>
+                    <option value="random">Chave Aleatória</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pixKey">Chave PIX</Label>
+                  <Input
+                    id="pixKey"
+                    placeholder="Sua chave PIX"
+                    {...register('pixKey')}
                   />
                 </div>
               </div>

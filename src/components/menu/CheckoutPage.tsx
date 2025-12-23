@@ -49,6 +49,8 @@ const checkoutSchema = z.object({
   zipCode: z.string().min(8, 'CEP inválido'),
   reference: z.string().optional(),
   paymentMethod: z.enum(['online', 'cash', 'card_on_delivery', 'pix']),
+  needsChange: z.boolean().optional(),
+  changeFor: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
@@ -184,6 +186,8 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
           delivery_fee: deliveryFee,
           total,
           notes: data.notes || null,
+          needs_change: data.paymentMethod === 'cash' ? data.needsChange : false,
+          change_for: data.paymentMethod === 'cash' && data.needsChange ? data.changeFor : null,
         })
         .select()
         .single();
@@ -524,6 +528,36 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack }: Ch
                 <span>Cartão online</span>
               </Label>
             </RadioGroup>
+
+            {/* Cash change option */}
+            {paymentMethod === 'cash' && (
+              <div className="mt-4 p-4 rounded-lg border border-border bg-muted/50 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="needsChange"
+                    {...register('needsChange')}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="needsChange" className="cursor-pointer">
+                    Preciso de troco
+                  </Label>
+                </div>
+                {watch('needsChange') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="changeFor">Troco para quanto? (R$)</Label>
+                    <Input
+                      id="changeFor"
+                      type="number"
+                      step="0.01"
+                      min={total}
+                      placeholder={`Mínimo R$ ${total.toFixed(2)}`}
+                      {...register('changeFor')}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Notes */}
