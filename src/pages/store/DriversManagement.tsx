@@ -126,7 +126,6 @@ export default function DriversManagement() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Form states
-  const [newDriverEmail, setNewDriverEmail] = useState('');
   const [newDriverName, setNewDriverName] = useState('');
   const [newDriverPhone, setNewDriverPhone] = useState('');
   const [newDriverVehicle, setNewDriverVehicle] = useState('moto');
@@ -217,47 +216,15 @@ export default function DriversManagement() {
   };
 
   const handleAddDriver = async () => {
-    if (!companyId || !newDriverEmail) return;
+    if (!companyId || !newDriverName) return;
 
     setSaving(true);
     try {
-      // First, check if user exists by email
-      // We need to create a new user or find existing one
-      // For simplicity, we'll create a placeholder user account
-
-      // Check if a user with this email already exists in profiles
-      const { data: existingAuth } = await supabase.auth.signUp({
-        email: newDriverEmail,
-        password: crypto.randomUUID(), // Temporary password - driver will reset
-        options: {
-          data: {
-            full_name: newDriverName,
-          },
-        },
-      });
-
-      if (!existingAuth.user) {
-        throw new Error('Não foi possível criar o usuário');
-      }
-
-      // Update profile with phone
-      if (newDriverPhone) {
-        await supabase
-          .from('profiles')
-          .update({ phone: newDriverPhone, full_name: newDriverName })
-          .eq('id', existingAuth.user.id);
-      }
-
-      // Add driver role
-      await supabase.from('user_roles').insert({
-        user_id: existingAuth.user.id,
-        role: 'delivery_driver',
-      });
-
-      // Create driver record
+      // Create driver record directly without user account
       const { error: driverError } = await supabase.from('delivery_drivers').insert({
-        user_id: existingAuth.user.id,
         company_id: companyId,
+        driver_name: newDriverName,
+        driver_phone: newDriverPhone || null,
         vehicle_type: newDriverVehicle,
         license_plate: newDriverPlate || null,
         is_active: true,
@@ -443,7 +410,6 @@ export default function DriversManagement() {
   };
 
   const resetForm = () => {
-    setNewDriverEmail('');
     setNewDriverName('');
     setNewDriverPhone('');
     setNewDriverVehicle('moto');
@@ -603,7 +569,7 @@ export default function DriversManagement() {
                             </div>
                             <div>
                               <CardTitle className="text-base">
-                                {driver.profile?.full_name || 'Sem nome'}
+                                {driver.driver_name || driver.profile?.full_name || 'Sem nome'}
                               </CardTitle>
                               <p className="text-sm text-muted-foreground capitalize">
                                 {driver.vehicle_type || 'Moto'}
@@ -637,11 +603,11 @@ export default function DriversManagement() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {driver.profile?.phone && (
+                        {(driver.driver_phone || driver.profile?.phone) && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Phone className="h-4 w-4" />
-                            <a href={`tel:${driver.profile.phone}`} className="hover:underline">
-                              {driver.profile.phone}
+                            <a href={`tel:${driver.driver_phone || driver.profile?.phone}`} className="hover:underline">
+                              {driver.driver_phone || driver.profile?.phone}
                             </a>
                           </div>
                         )}
@@ -753,7 +719,7 @@ export default function DriversManagement() {
                               ) : (
                                 availableDrivers.map((driver) => (
                                   <SelectItem key={driver.id} value={driver.id}>
-                                    {driver.profile?.full_name || 'Sem nome'}
+                                    {driver.driver_name || driver.profile?.full_name || 'Sem nome'}
                                   </SelectItem>
                                 ))
                               )}
@@ -787,17 +753,13 @@ export default function DriversManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="driver-email">E-mail *</Label>
+              <Label htmlFor="driver-phone">Telefone</Label>
               <Input
-                id="driver-email"
-                type="email"
-                value={newDriverEmail}
-                onChange={(e) => setNewDriverEmail(e.target.value)}
-                placeholder="email@exemplo.com"
+                id="driver-phone"
+                value={newDriverPhone}
+                onChange={(e) => setNewDriverPhone(e.target.value)}
+                placeholder="(11) 99999-9999"
               />
-              <p className="text-xs text-muted-foreground">
-                O entregador receberá um convite por e-mail
-              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="driver-phone">Telefone</Label>
@@ -839,7 +801,7 @@ export default function DriversManagement() {
             </Button>
             <Button
               onClick={handleAddDriver}
-              disabled={saving || !newDriverName || !newDriverEmail}
+              disabled={saving || !newDriverName}
               className="gradient-primary text-primary-foreground"
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

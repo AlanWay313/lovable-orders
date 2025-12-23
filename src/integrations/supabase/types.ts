@@ -188,34 +188,40 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          driver_name: string | null
+          driver_phone: string | null
           id: string
           is_active: boolean | null
           is_available: boolean | null
           license_plate: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
           vehicle_type: string | null
         }
         Insert: {
           company_id: string
           created_at?: string
+          driver_name?: string | null
+          driver_phone?: string | null
           id?: string
           is_active?: boolean | null
           is_available?: boolean | null
           license_plate?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           vehicle_type?: string | null
         }
         Update: {
           company_id?: string
           created_at?: string
+          driver_name?: string | null
+          driver_phone?: string | null
           id?: string
           is_active?: boolean | null
           is_available?: boolean | null
           license_plate?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           vehicle_type?: string | null
         }
         Relationships: [
