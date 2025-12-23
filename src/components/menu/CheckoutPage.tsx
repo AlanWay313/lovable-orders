@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,16 +18,21 @@ import {
   Tag,
   X,
   AlertCircle,
+  LogIn,
+  LogOut,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/hooks/useCart';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { CustomerAuthModal } from './CustomerAuthModal';
+import { AddressSelector } from './AddressSelector';
 
 interface ViaCepResponse {
   cep: string;
@@ -47,6 +52,20 @@ interface Coupon {
   min_order_value: number | null;
 }
 
+interface SavedAddress {
+  id: string;
+  street: string;
+  number: string;
+  complement: string | null;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  reference: string | null;
+  label: string | null;
+  is_default: boolean | null;
+}
+
 const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Nome é obrigatório'),
   customerPhone: z.string().min(10, 'Telefone inválido'),
@@ -59,6 +78,7 @@ const checkoutSchema = z.object({
   state: z.string().min(2, 'Estado é obrigatório'),
   zipCode: z.string().min(8, 'CEP inválido'),
   reference: z.string().optional(),
+  addressLabel: z.string().optional(),
   paymentMethod: z.enum(['online', 'cash', 'card_on_delivery', 'pix']),
   needsChange: z.boolean().optional(),
   changeFor: z.coerce.number().optional(),
@@ -86,9 +106,19 @@ interface OrderSummary {
 
 export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { items, subtotal, clearCart } = useCart();
   const { toast } = useToast();
+  
+  // Auth state
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  
+  // Address state
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  
+  // Form state
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
@@ -107,15 +137,67 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
     formState: { errors },
     setValue,
     watch,
+    reset,
   } = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       paymentMethod: 'pix',
+      addressLabel: 'Casa',
     },
   });
 
   const paymentMethod = watch('paymentMethod');
   const zipCode = watch('zipCode');
+
+  // Check auth on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setAuthUser(user);
+      
+      if (user) {
+        // Load user profile data
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', user.id)
+          .maybeSingle();
+        
+        if (profile) {
+          setValue('customerName', profile.full_name || '');
+          setValue('customerPhone', profile.phone || '');
+        }
+        setValue('customerEmail', user.email || '');
+      }
+      
+      setAuthLoading(false);
+    };
+    
+    checkAuth();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setAuthUser(session?.user || null);
+      if (session?.user) {
+        setValue('customerEmail', session.user.email || '');
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [setValue]);
+
+  // When address is selected, optionally show form if "new"
+  useEffect(() => {
+    if (selectedAddress && !showAddressForm) {
+      setValue('street', selectedAddress.street);
+      setValue('number', selectedAddress.number);
+      setValue('complement', selectedAddress.complement || '');
+      setValue('neighborhood', selectedAddress.neighborhood);
+      setValue('city', selectedAddress.city);
+      setValue('state', selectedAddress.state);
+      setValue('zipCode', selectedAddress.zip_code);
+      setValue('reference', selectedAddress.reference || '');
+    }
+  }, [selectedAddress, showAddressForm, setValue]);
   
   // Calculate discount
   const discountAmount = appliedCoupon 
@@ -200,19 +282,16 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         return;
       }
 
-      // Check expiration
       if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
         setCouponError('Este cupom expirou');
         return;
       }
 
-      // Check minimum order value
       if (coupon.min_order_value && subtotal < coupon.min_order_value) {
         setCouponError(`Pedido mínimo de R$ ${coupon.min_order_value.toFixed(2)} para este cupom`);
         return;
       }
 
-      // Check max uses
       if (coupon.max_uses && coupon.current_uses >= coupon.max_uses) {
         setCouponError('Este cupom atingiu o limite de uso');
         return;
@@ -239,6 +318,18 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
     setCouponError(null);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setSelectedAddress(null);
+    setShowAddressForm(false);
+    reset({
+      paymentMethod: 'pix',
+      addressLabel: 'Casa',
+    });
+    toast({ title: 'Você saiu da sua conta' });
+  };
+
   const onSubmit = async (data: CheckoutFormData) => {
     if (!isStoreOpen) {
       toast({
@@ -260,33 +351,49 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
     setLoading(true);
     try {
-      // Resolve the current auth user directly from the auth session.
-      // This avoids cases where `useAuth()` hasn't hydrated yet but requests are still made as `authenticated`.
       const { data: authUserData } = await supabase.auth.getUser();
       const authUserId = authUserData.user?.id ?? null;
       const isAuthenticatedCheckout = Boolean(authUserId);
 
-      // 1. Create address
-      const { data: addressData, error: addressError } = await supabase
-        .from('customer_addresses')
-        .insert({
-          user_id: authUserId,
-          session_id: isAuthenticatedCheckout ? null : `guest-${crypto.randomUUID()}`,
-          street: data.street,
-          number: data.number,
-          complement: data.complement || null,
-          neighborhood: data.neighborhood,
-          city: data.city,
-          state: data.state,
-          zip_code: data.zipCode,
-          reference: data.reference || null,
-        })
-        .select()
-        .single();
+      let addressId = selectedAddress?.id;
 
-      if (addressError) throw addressError;
+      // If using a new address or guest checkout, create address
+      if (showAddressForm || !authUserId || !selectedAddress) {
+        const { data: addressData, error: addressError } = await supabase
+          .from('customer_addresses')
+          .insert({
+            user_id: authUserId,
+            session_id: isAuthenticatedCheckout ? null : `guest-${crypto.randomUUID()}`,
+            street: data.street,
+            number: data.number,
+            complement: data.complement || null,
+            neighborhood: data.neighborhood,
+            city: data.city,
+            state: data.state,
+            zip_code: data.zipCode,
+            reference: data.reference || null,
+            label: data.addressLabel || 'Casa',
+            is_default: !selectedAddress, // Make default if first address
+          })
+          .select()
+          .single();
 
-      // 2. Create order
+        if (addressError) throw addressError;
+        addressId = addressData.id;
+      }
+
+      // Create or update customer record for guests
+      if (!authUserId && data.customerEmail) {
+        await supabase.from('customers').upsert({
+          name: data.customerName,
+          email: data.customerEmail,
+          phone: data.customerPhone,
+        }, {
+          onConflict: 'email',
+        }).select().maybeSingle();
+      }
+
+      // Create order
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -295,7 +402,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
           customer_name: data.customerName,
           customer_phone: data.customerPhone,
           customer_email: data.customerEmail || null,
-          delivery_address_id: addressData.id,
+          delivery_address_id: addressId,
           payment_method: data.paymentMethod,
           subtotal,
           delivery_fee: deliveryFee,
@@ -311,7 +418,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
       if (orderError) throw orderError;
 
-      // 3. Create order items
+      // Create order items
       const orderItems = items.map((item) => ({
         order_id: orderData.id,
         product_id: item.productId,
@@ -329,7 +436,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
 
       if (itemsError) throw itemsError;
 
-      // 4. Update coupon usage if applied
+      // Update coupon usage
       if (appliedCoupon) {
         await supabase
           .from('coupons')
@@ -337,7 +444,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
           .eq('id', appliedCoupon.id);
       }
 
-      // 5. If payment method is online, redirect to Stripe checkout
+      // Handle online payment
       if (data.paymentMethod === 'online') {
         const response = await supabase.functions.invoke('create-checkout', {
           body: {
@@ -364,7 +471,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
         }
       }
 
-      // Success for non-online payments - save order summary before clearing cart
+      // Success
       setOrderSummary({
         subtotal,
         discountAmount,
@@ -433,6 +540,14 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
     );
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -455,6 +570,40 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
             </p>
           </div>
         )}
+
+        {/* Login/Account Section */}
+        <section className="bg-card rounded-xl border border-border p-6 mb-6">
+          {authUser ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">{authUser.user_metadata?.full_name || authUser.email}</p>
+                  <p className="text-sm text-muted-foreground">{authUser.email}</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Já tem cadastro?</p>
+                <p className="text-sm text-muted-foreground">
+                  Entre para usar seus endereços salvos
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => setShowAuthModal(true)}>
+                <LogIn className="h-4 w-4 mr-2" />
+                Entrar
+              </Button>
+            </div>
+          )}
+        </section>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Customer Info */}
@@ -491,7 +640,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
                 )}
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="customerEmail">Email (opcional)</Label>
+                <Label htmlFor="customerEmail">Email {authUser ? '' : '(para receber atualizações)'}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -500,119 +649,161 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
                     placeholder="seu@email.com"
                     className="pl-10"
                     {...register('customerEmail')}
+                    disabled={!!authUser}
                   />
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Address */}
+          {/* Address Selection */}
           <section className="bg-card rounded-xl border border-border p-6">
             <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
               <MapPin className="h-5 w-5 text-primary" />
               Endereço de Entrega
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="zipCode">CEP *</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="zipCode"
-                    placeholder="00000-000"
-                    {...register('zipCode')}
-                    onBlur={handleCepBlur}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => searchCep(zipCode || '')}
-                    disabled={loadingCep}
-                  >
-                    {loadingCep ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Search className="h-4 w-4" />
+
+            {/* Show address selector for logged in users */}
+            {authUser && !showAddressForm && (
+              <AddressSelector
+                userId={authUser.id}
+                selectedAddressId={selectedAddress?.id || null}
+                onSelect={setSelectedAddress}
+                onAddNew={() => {
+                  setSelectedAddress(null);
+                  setShowAddressForm(true);
+                }}
+              />
+            )}
+
+            {/* Show address form for guests or when adding new */}
+            {(!authUser || showAddressForm) && (
+              <div className="space-y-4">
+                {authUser && showAddressForm && (
+                  <div className="flex items-center justify-between pb-4 border-b border-border">
+                    <span className="font-medium">Novo Endereço</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAddressForm(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="addressLabel">Apelido do endereço</Label>
+                    <Input
+                      id="addressLabel"
+                      placeholder="Ex: Casa, Trabalho..."
+                      {...register('addressLabel')}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="zipCode">CEP *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="zipCode"
+                        placeholder="00000-000"
+                        {...register('zipCode')}
+                        onBlur={handleCepBlur}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => searchCep(zipCode || '')}
+                        disabled={loadingCep}
+                      >
+                        {loadingCep ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {errors.zipCode && (
+                      <p className="text-sm text-destructive">{errors.zipCode.message}</p>
                     )}
-                  </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="street">Rua *</Label>
+                    <Input
+                      id="street"
+                      placeholder="Nome da rua"
+                      {...register('street')}
+                    />
+                    {errors.street && (
+                      <p className="text-sm text-destructive">{errors.street.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="number">Número *</Label>
+                    <Input
+                      id="number"
+                      placeholder="123"
+                      {...register('number')}
+                    />
+                    {errors.number && (
+                      <p className="text-sm text-destructive">{errors.number.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="complement">Complemento</Label>
+                    <Input
+                      id="complement"
+                      placeholder="Apto, bloco..."
+                      {...register('complement')}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="neighborhood">Bairro *</Label>
+                    <Input
+                      id="neighborhood"
+                      placeholder="Nome do bairro"
+                      {...register('neighborhood')}
+                    />
+                    {errors.neighborhood && (
+                      <p className="text-sm text-destructive">{errors.neighborhood.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Cidade *</Label>
+                    <Input
+                      id="city"
+                      placeholder="Nome da cidade"
+                      {...register('city')}
+                    />
+                    {errors.city && (
+                      <p className="text-sm text-destructive">{errors.city.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">Estado *</Label>
+                    <Input
+                      id="state"
+                      placeholder="SP"
+                      {...register('state')}
+                    />
+                    {errors.state && (
+                      <p className="text-sm text-destructive">{errors.state.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="reference">Ponto de referência</Label>
+                    <Input
+                      id="reference"
+                      placeholder="Próximo a..."
+                      {...register('reference')}
+                    />
+                  </div>
                 </div>
-                {errors.zipCode && (
-                  <p className="text-sm text-destructive">{errors.zipCode.message}</p>
-                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="street">Rua *</Label>
-                <Input
-                  id="street"
-                  placeholder="Nome da rua"
-                  {...register('street')}
-                />
-                {errors.street && (
-                  <p className="text-sm text-destructive">{errors.street.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="number">Número *</Label>
-                <Input
-                  id="number"
-                  placeholder="123"
-                  {...register('number')}
-                />
-                {errors.number && (
-                  <p className="text-sm text-destructive">{errors.number.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="complement">Complemento</Label>
-                <Input
-                  id="complement"
-                  placeholder="Apto, bloco..."
-                  {...register('complement')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="neighborhood">Bairro *</Label>
-                <Input
-                  id="neighborhood"
-                  placeholder="Nome do bairro"
-                  {...register('neighborhood')}
-                />
-                {errors.neighborhood && (
-                  <p className="text-sm text-destructive">{errors.neighborhood.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">Cidade *</Label>
-                <Input
-                  id="city"
-                  placeholder="Nome da cidade"
-                  {...register('city')}
-                />
-                {errors.city && (
-                  <p className="text-sm text-destructive">{errors.city.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="state">Estado *</Label>
-                <Input
-                  id="state"
-                  placeholder="SP"
-                  {...register('state')}
-                />
-                {errors.state && (
-                  <p className="text-sm text-destructive">{errors.state.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="reference">Ponto de referência</Label>
-                <Input
-                  id="reference"
-                  placeholder="Próximo a..."
-                  {...register('reference')}
-                />
-              </div>
-            </div>
+            )}
           </section>
 
           {/* Coupon */}
@@ -858,6 +1049,15 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
           </Button>
         </form>
       </div>
+
+      {/* Auth Modal */}
+      <CustomerAuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          // Reload will happen via auth state change
+        }}
+      />
     </div>
   );
 }

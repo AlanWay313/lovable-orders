@@ -226,6 +226,7 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean | null
+          label: string | null
           neighborhood: string
           number: string
           reference: string | null
@@ -241,6 +242,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean | null
+          label?: string | null
           neighborhood: string
           number: string
           reference?: string | null
@@ -256,6 +258,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean | null
+          label?: string | null
           neighborhood?: string
           number?: string
           reference?: string | null
@@ -264,6 +267,36 @@ export type Database = {
           street?: string
           user_id?: string | null
           zip_code?: string
+        }
+        Relationships: []
+      }
+      customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
