@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import PublicMenu from "./pages/PublicMenu";
+import AdminCompanies from "./pages/admin/AdminCompanies";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/companies"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin']}>
+                  <AdminCompanies />
                 </ProtectedRoute>
               }
             />
