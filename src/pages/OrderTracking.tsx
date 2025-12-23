@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import DeliveryMap from '@/components/map/DeliveryMap';
 
 interface Order {
   id: string;
@@ -31,11 +32,13 @@ interface Order {
   created_at: string;
   estimated_delivery_time: string | null;
   notes: string | null;
+  delivery_driver_id: string | null;
   company: {
     name: string;
     phone: string | null;
     logo_url: string | null;
     primary_color: string | null;
+    address: string | null;
   };
   items: {
     id: string;
@@ -74,7 +77,7 @@ export default function OrderTracking() {
         .from('orders')
         .select(`
           *,
-          company:companies(name, phone, logo_url, primary_color)
+          company:companies(name, phone, logo_url, primary_color, address)
         `)
         .eq('id', orderId)
         .maybeSingle();
@@ -298,6 +301,24 @@ export default function OrderTracking() {
             )}
           </CardContent>
         </Card>
+
+        {/* Delivery Map - Show when out for delivery */}
+        {order.status === 'out_for_delivery' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Localização do Entregador
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DeliveryMap
+                driverId={order.delivery_driver_id}
+                companyAddress={order.company.address || undefined}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Order Details */}
         <Card>

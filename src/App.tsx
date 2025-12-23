@@ -18,6 +18,7 @@ import CouponsManagement from "./pages/store/CouponsManagement";
 import UserSettings from "./pages/store/UserSettings";
 import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
+import DriverDashboard from "./pages/DriverDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -103,6 +104,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRoles={['super_admin']}>
                   <AdminCompanies />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/driver"
+              element={
+                <ProtectedRoute>
+                  <DriverDashboard />
                 </ProtectedRoute>
               }
             />
