@@ -194,6 +194,7 @@ function PublicMenuContent() {
         companyId={company.id}
         companyName={company.name}
         deliveryFee={Number(company.delivery_fee) || 0}
+        minOrderValue={Number(company.min_order_value) || 0}
         onBack={() => setCheckoutMode(false)}
         isStoreOpen={company.is_open}
         pixKey={company.pix_key}

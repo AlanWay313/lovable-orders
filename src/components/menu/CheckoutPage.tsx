@@ -91,6 +91,7 @@ interface CheckoutPageProps {
   companyId: string;
   companyName: string;
   deliveryFee: number;
+  minOrderValue: number;
   onBack: () => void;
   isStoreOpen?: boolean;
   pixKey?: string | null;
@@ -104,7 +105,7 @@ interface OrderSummary {
   total: number;
 }
 
-export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
+export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValue, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
   const { toast } = useToast();
@@ -318,6 +319,15 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, onBack, isSt
       toast({
         title: 'Carrinho vazio',
         description: 'Adicione itens antes de finalizar',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (minOrderValue > 0 && subtotal < minOrderValue) {
+      toast({
+        title: 'Pedido mínimo não atingido',
+        description: `O valor mínimo do pedido é R$ ${minOrderValue.toFixed(2)}. Seu carrinho tem R$ ${subtotal.toFixed(2)}.`,
         variant: 'destructive',
       });
       return;
