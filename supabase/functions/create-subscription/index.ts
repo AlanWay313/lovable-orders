@@ -104,8 +104,9 @@ serve(async (req) => {
       customer: customerId,
       line_items: [{ price: plan.priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${origin}/dashboard?subscription=success`,
-      cancel_url: `${origin}/dashboard?subscription=cancelled`,
+      payment_method_types: ["card"],
+      success_url: `${origin}/dashboard/plans?subscription=success`,
+      cancel_url: `${origin}/dashboard/plans?subscription=cancelled`,
       metadata: {
         userId: user.id,
         planKey,
