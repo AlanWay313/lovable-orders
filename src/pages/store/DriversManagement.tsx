@@ -80,6 +80,9 @@ interface Driver {
   is_active: boolean | null;
   created_at: string;
   profile?: Profile;
+  // For drivers without user account
+  driver_name?: string;
+  driver_phone?: string;
 }
 
 interface Order {
