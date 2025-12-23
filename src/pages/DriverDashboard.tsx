@@ -27,21 +27,32 @@ interface Order {
   id: string;
   customer_name: string;
   customer_phone: string;
+  customer_email: string | null;
   status: string;
   total: number;
+  subtotal: number;
+  delivery_fee: number;
+  payment_method: string;
+  payment_status: string;
   created_at: string;
   notes: string | null;
+  needs_change: boolean | null;
+  change_for: number | null;
   delivery_address: {
     street: string;
     number: string;
     neighborhood: string;
     city: string;
+    state: string;
     complement: string | null;
+    reference: string | null;
+    zip_code: string;
   } | null;
   company: {
     name: string;
     address: string | null;
     phone: string | null;
+    city: string | null;
   };
 }
 
@@ -92,12 +103,12 @@ export default function DriverDashboard() {
         .from('orders')
         .select(`
           *,
-          delivery_address:customer_addresses(street, number, neighborhood, city, complement),
-          company:companies(name, address, phone)
+          delivery_address:customer_addresses(street, number, neighborhood, city, state, complement, reference, zip_code),
+          company:companies(name, address, phone, city)
         `)
         .eq('delivery_driver_id', driverData.id)
         .in('status', ['ready', 'out_for_delivery'])
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true }); // Ordenar por mais antigo primeiro (FIFO)
 
       if (ordersError) throw ordersError;
 
@@ -241,65 +252,136 @@ export default function DriverDashboard() {
               </CardContent>
             </Card>
           ) : (
-            orders.map((order) => (
-              <Card key={order.id}>
+            orders.map((order, index) => (
+              <Card key={order.id} className={index === 0 ? 'ring-2 ring-primary' : ''}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{order.company.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      {index === 0 && (
+                        <Badge variant="destructive" className="text-xs">Próxima</Badge>
+                      )}
+                      <CardTitle className="text-base">{order.company.name}</CardTitle>
+                    </div>
                     <Badge variant={order.status === 'out_for_delivery' ? 'default' : 'secondary'}>
                       {order.status === 'out_for_delivery' ? 'Em entrega' : 'Pronto'}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(order.created_at), "HH:mm", { locale: ptBR })} - {order.customer_name}
-                  </p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>{format(new Date(order.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Customer Info */}
+                  <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-lg">{order.customer_name}</span>
+                    </div>
+                    <a
+                      href={`tel:${order.customer_phone}`}
+                      className="flex items-center gap-2 text-primary hover:underline"
+                    >
+                      <Phone className="h-4 w-4" />
+                      <span>{order.customer_phone}</span>
+                    </a>
+                  </div>
+
                   {/* Delivery Address */}
                   {order.delivery_address && (
-                    <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                      <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-medium">
-                          {order.delivery_address.street}, {order.delivery_address.number}
-                        </p>
-                        <p className="text-muted-foreground">
-                          {order.delivery_address.neighborhood} - {order.delivery_address.city}
-                        </p>
-                        {order.delivery_address.complement && (
-                          <p className="text-muted-foreground">{order.delivery_address.complement}</p>
-                        )}
+                    <div className="p-3 bg-muted rounded-lg space-y-2">
+                      <div className="flex items-start gap-3">
+                        <MapPin className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                        <div className="text-sm flex-1">
+                          <p className="font-medium text-base">
+                            {order.delivery_address.street}, {order.delivery_address.number}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {order.delivery_address.neighborhood}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {order.delivery_address.city} - {order.delivery_address.state}
+                          </p>
+                          {order.delivery_address.complement && (
+                            <p className="text-muted-foreground mt-1">
+                              <span className="font-medium">Complemento:</span> {order.delivery_address.complement}
+                            </p>
+                          )}
+                          {order.delivery_address.reference && (
+                            <p className="text-muted-foreground">
+                              <span className="font-medium">Referência:</span> {order.delivery_address.reference}
+                            </p>
+                          )}
+                          <p className="text-muted-foreground text-xs mt-1">
+                            CEP: {order.delivery_address.zip_code}
+                          </p>
+                        </div>
                       </div>
+                      
+                      {/* Open in Maps Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          const address = `${order.delivery_address!.street}, ${order.delivery_address!.number}, ${order.delivery_address!.neighborhood}, ${order.delivery_address!.city}, ${order.delivery_address!.state}`;
+                          const encodedAddress = encodeURIComponent(address);
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
+                        }}
+                      >
+                        <Navigation className="h-4 w-4 mr-2" />
+                        Abrir no Google Maps
+                      </Button>
                     </div>
                   )}
 
-                  {/* Customer Phone */}
-                  <a
-                    href={`tel:${order.customer_phone}`}
-                    className="flex items-center gap-3 p-3 bg-muted rounded-lg text-primary hover:bg-muted/80 transition-colors"
-                  >
-                    <Phone className="h-5 w-5" />
-                    <span className="text-sm">{order.customer_phone}</span>
-                  </a>
+                  {/* Payment Info */}
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="flex justify-between items-center text-sm">
+                      <span>Forma de pagamento:</span>
+                      <Badge variant="outline">
+                        {order.payment_method === 'cash' && 'Dinheiro'}
+                        {order.payment_method === 'card_on_delivery' && 'Cartão na entrega'}
+                        {order.payment_method === 'pix' && 'PIX'}
+                        {order.payment_method === 'online' && 'Pago online'}
+                      </Badge>
+                    </div>
+                    {order.needs_change && order.change_for && (
+                      <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-sm">
+                        <span className="font-medium text-yellow-700 dark:text-yellow-400">
+                          Troco para: {formatCurrency(order.change_for)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="mt-2 space-y-1 text-sm">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(order.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Taxa de entrega</span>
+                        <span>{formatCurrency(order.delivery_fee)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-base pt-1 border-t">
+                        <span>Total</span>
+                        <span>{formatCurrency(order.total)}</span>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Notes */}
                   {order.notes && (
-                    <div className="text-sm">
-                      <p className="text-muted-foreground">Obs: {order.notes}</p>
+                    <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-sm">
+                      <p className="font-medium text-orange-700 dark:text-orange-400">Observações:</p>
+                      <p className="text-muted-foreground mt-1">{order.notes}</p>
                     </div>
                   )}
 
-                  {/* Total */}
-                  <div className="flex justify-between items-center pt-2 border-t">
-                    <span className="font-medium">Total</span>
-                    <span className="font-bold">{formatCurrency(order.total)}</span>
-                  </div>
-
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-2">
                     {order.status === 'ready' && (
                       <Button
                         className="flex-1"
+                        size="lg"
                         onClick={() => updateOrderStatus(order.id, 'out_for_delivery')}
                       >
                         <Navigation className="h-4 w-4 mr-2" />
@@ -309,6 +391,8 @@ export default function DriverDashboard() {
                     {order.status === 'out_for_delivery' && (
                       <Button
                         className="flex-1"
+                        size="lg"
+                        variant="default"
                         onClick={() => updateOrderStatus(order.id, 'delivered')}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
