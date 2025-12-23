@@ -375,35 +375,48 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
                         ? currentCount >= group.max_selections && !isSelected
                         : currentCount >= 2 && !isSelected;
 
+                      const handleToggle = () => {
+                        if (maxReached && !isSelected) return;
+                        if (group.selection_type === 'half_half') {
+                          handleHalfHalfToggle(group, option, !isSelected);
+                        } else {
+                          handleMultipleToggle(group, option, !isSelected);
+                        }
+                      };
+
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={option.id}
-                          className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                            isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
-                          } ${maxReached ? 'opacity-50' : ''}`}
+                          onClick={handleToggle}
+                          disabled={maxReached && !isSelected}
+                          className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                            isSelected 
+                              ? 'border-primary bg-primary/10 shadow-sm' 
+                              : 'border-border hover:border-primary/30 hover:bg-muted/50'
+                          } ${maxReached && !isSelected ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                         >
                           <div className="flex items-center gap-3">
-                            <Checkbox
-                              id={option.id}
-                              checked={isSelected}
-                              disabled={maxReached}
-                              onCheckedChange={(checked) => {
-                                if (group.selection_type === 'half_half') {
-                                  handleHalfHalfToggle(group, option, checked as boolean);
-                                } else {
-                                  handleMultipleToggle(group, option, checked as boolean);
-                                }
-                              }}
-                            />
-                            <Label htmlFor={option.id} className="cursor-pointer flex-1">
-                              <span>{option.name}</span>
+                            <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                              isSelected 
+                                ? 'bg-primary border-primary' 
+                                : 'border-muted-foreground/30'
+                            }`}>
+                              {isSelected && (
+                                <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium">{option.name}</span>
                               {option.description && (
                                 <span className="block text-xs text-muted-foreground">{option.description}</span>
                               )}
-                            </Label>
+                            </div>
                           </div>
                           {option.price_modifier !== 0 && (
-                            <span className={`text-sm font-medium ${option.price_modifier > 0 ? 'text-primary' : 'text-success'}`}>
+                            <span className={`text-sm font-semibold ${option.price_modifier > 0 ? 'text-primary' : 'text-green-600'}`}>
                               {option.price_modifier > 0 ? '+' : ''}R$ {
                                 group.selection_type === 'half_half' 
                                   ? (option.price_modifier / 2).toFixed(2) 
@@ -412,7 +425,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
                               {group.selection_type === 'half_half' && ' (½)'}
                             </span>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
