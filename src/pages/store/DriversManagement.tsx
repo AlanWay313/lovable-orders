@@ -612,9 +612,9 @@ export default function DriversManagement() {
                             <Mail className="h-4 w-4" />
                             <span>{driver.email}</span>
                             {driver.user_id ? (
-                              <Badge variant="default" className="text-xs bg-green-500">Vinculado</Badge>
+                              <Badge variant="default" className="text-xs bg-green-500">Ativo</Badge>
                             ) : (
-                              <Badge variant="outline" className="text-xs">Aguardando cadastro</Badge>
+                              <Badge variant="secondary" className="text-xs">Pronto para acessar</Badge>
                             )}
                           </div>
                         )}
