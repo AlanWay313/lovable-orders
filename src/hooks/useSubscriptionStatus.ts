@@ -25,6 +25,14 @@ export function useSubscriptionStatus() {
     }
 
     try {
+      // Get fresh session first
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        console.log('No valid session for subscription check');
+        setLoading(false);
+        return;
+      }
+
       // Get company data
       const { data: company } = await supabase
         .from('companies')
@@ -38,17 +46,39 @@ export function useSubscriptionStatus() {
       }
 
       // Get subscription details from edge function
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        setLoading(false);
-        return;
-      }
-
       const response = await supabase.functions.invoke('check-subscription', {
         headers: {
           Authorization: `Bearer ${sessionData.session.access_token}`,
         },
       });
+
+      // Handle edge function errors gracefully
+      if (response.error) {
+        console.log('Subscription check returned error, using defaults:', response.error);
+        // Use local data as fallback
+        const monthlyOrderCount = company.monthly_order_count || 0;
+        const orderLimit = company.subscription_plan === 'basic' ? 2000 
+          : company.subscription_plan === 'pro' ? 5000 
+          : company.subscription_plan === 'enterprise' ? -1 
+          : 1000;
+        const usagePercentage = orderLimit === -1 ? 0 : (monthlyOrderCount / orderLimit) * 100;
+        
+        setStatus({
+          plan: company.subscription_plan || 'free',
+          orderLimit,
+          monthlyOrderCount,
+          displayName: company.subscription_plan === 'basic' ? 'Plano Básico'
+            : company.subscription_plan === 'pro' ? 'Plano Pro'
+            : company.subscription_plan === 'enterprise' ? 'Plano Enterprise'
+            : 'Plano Gratuito',
+          subscriptionEnd: company.subscription_end_date || undefined,
+          usagePercentage,
+          isNearLimit: orderLimit !== -1 && usagePercentage >= 80 && usagePercentage < 100,
+          isAtLimit: orderLimit !== -1 && usagePercentage >= 100,
+        });
+        setLoading(false);
+        return;
+      }
 
       const subscriptionData = response.data || { 
         plan: 'free', 
