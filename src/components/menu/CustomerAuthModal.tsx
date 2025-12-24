@@ -67,25 +67,38 @@ export function CustomerAuthModal({ open, onClose, onSuccess }: CustomerAuthModa
   const handleEmailLogin = async (data: EmailFormData) => {
     setLoading(true);
     try {
-      // Check if customer exists with this email
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .select('id, name, email, phone')
-        .eq('email', data.email.toLowerCase().trim())
-        .maybeSingle();
+      // Use secure Edge Function for customer lookup
+      const { data: result, error } = await supabase.functions.invoke('lookup-customer', {
+        body: { email: data.email.toLowerCase().trim() }
+      });
 
       if (error) throw error;
 
-      if (customer) {
-        toast.success(`Bem-vindo de volta, ${customer.name}!`);
-        onSuccess(customer);
-        handleClose();
+      if (result?.found && result?.customerId) {
+        // Fetch full customer data using the secure customer ID
+        const { data: customer, error: fetchError } = await supabase
+          .from('customers')
+          .select('id, name, email, phone')
+          .eq('id', result.customerId)
+          .maybeSingle();
+
+        if (fetchError) throw fetchError;
+
+        if (customer) {
+          toast.success(`Bem-vindo de volta, ${result.firstName}!`);
+          onSuccess(customer);
+          handleClose();
+        }
       } else {
         toast.error('Email não encontrado. Faça seu primeiro pedido para se cadastrar.');
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error('Erro ao verificar email');
+      if (error.message?.includes('429') || error.status === 429) {
+        toast.error('Muitas tentativas. Aguarde um minuto e tente novamente.');
+      } else {
+        toast.error('Erro ao verificar email');
+      }
     } finally {
       setLoading(false);
     }
@@ -96,25 +109,38 @@ export function CustomerAuthModal({ open, onClose, onSuccess }: CustomerAuthModa
     try {
       const cleanPhone = data.phone.replace(/\D/g, '');
       
-      // Check if customer exists with this phone
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .select('id, name, email, phone')
-        .eq('phone', cleanPhone)
-        .maybeSingle();
+      // Use secure Edge Function for customer lookup
+      const { data: result, error } = await supabase.functions.invoke('lookup-customer', {
+        body: { phone: cleanPhone }
+      });
 
       if (error) throw error;
 
-      if (customer) {
-        toast.success(`Bem-vindo de volta, ${customer.name}!`);
-        onSuccess(customer);
-        handleClose();
+      if (result?.found && result?.customerId) {
+        // Fetch full customer data using the secure customer ID
+        const { data: customer, error: fetchError } = await supabase
+          .from('customers')
+          .select('id, name, email, phone')
+          .eq('id', result.customerId)
+          .maybeSingle();
+
+        if (fetchError) throw fetchError;
+
+        if (customer) {
+          toast.success(`Bem-vindo de volta, ${result.firstName}!`);
+          onSuccess(customer);
+          handleClose();
+        }
       } else {
         toast.error('Telefone não encontrado. Faça seu primeiro pedido para se cadastrar.');
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error('Erro ao verificar telefone');
+      if (error.message?.includes('429') || error.status === 429) {
+        toast.error('Muitas tentativas. Aguarde um minuto e tente novamente.');
+      } else {
+        toast.error('Erro ao verificar telefone');
+      }
     } finally {
       setLoading(false);
     }
