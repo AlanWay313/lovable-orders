@@ -16,6 +16,8 @@ import {
   Package,
   MapPin,
   History,
+  Clock,
+  Navigation,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -80,6 +82,7 @@ interface Driver {
   license_plate: string | null;
   is_available: boolean | null;
   is_active: boolean | null;
+  driver_status: string | null;
   created_at: string;
   profile?: Profile;
   // For drivers without user account
@@ -197,7 +200,7 @@ export default function DriversManagement() {
 
       setDrivers(driversWithProfiles);
 
-      // Load orders ready for delivery or out for delivery
+      // Load orders ready for delivery, awaiting driver, or out for delivery
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -205,8 +208,8 @@ export default function DriversManagement() {
           customer_addresses:delivery_address_id (street, number, neighborhood, city)
         `)
         .eq('company_id', company.id)
-        .in('status', ['ready', 'out_for_delivery'])
-        .order('created_at', { ascending: false });
+        .in('status', ['ready', 'awaiting_driver', 'out_for_delivery'])
+        .order('created_at', { ascending: true }); // FIFO - oldest first
 
       if (ordersError) throw ordersError;
       setOrders(ordersData || []);
@@ -550,9 +553,18 @@ export default function DriversManagement() {
               <Truck className="h-4 w-4" />
               Entregadores
             </TabsTrigger>
-            <TabsTrigger value="assign" className="gap-2">
+            <TabsTrigger value="queue" className="gap-2">
               <Package className="h-4 w-4" />
-              Atribuir Pedidos
+              Fila de Entregas
+              {ordersWithDriver.length > 0 && (
+                <Badge variant="default" className="ml-1 bg-blue-500">
+                  {ordersWithDriver.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="assign" className="gap-2">
+              <Clock className="h-4 w-4" />
+              Aguardando
               {ordersWithoutDriver.length > 0 && (
                 <Badge variant="destructive" className="ml-1">
                   {ordersWithoutDriver.length}
@@ -709,6 +721,142 @@ export default function DriversManagement() {
                     </Card>
                   );
                 })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Delivery Queue Tab */}
+          <TabsContent value="queue" className="mt-6">
+            {ordersWithDriver.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Truck className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Nenhuma entrega em andamento</h3>
+                  <p className="text-muted-foreground text-center">
+                    Os pedidos atribuídos aos entregadores aparecerão aqui
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                {drivers
+                  .filter((d) => d.is_active)
+                  .map((driver) => {
+                    const driverOrders = ordersWithDriver.filter(
+                      (o) => o.delivery_driver_id === driver.id
+                    );
+                    if (driverOrders.length === 0) return null;
+
+                    const VehicleIcon = vehicleIcons[driver.vehicle_type || 'moto'] || Bike;
+                    const driverStatusLabel = driver.driver_status === 'in_delivery' 
+                      ? 'Em entrega' 
+                      : driver.driver_status === 'available' 
+                        ? 'Disponível' 
+                        : 'Offline';
+                    const driverStatusColor = driver.driver_status === 'in_delivery'
+                      ? 'bg-blue-500'
+                      : driver.driver_status === 'available'
+                        ? 'bg-green-500'
+                        : 'bg-gray-500';
+
+                    return (
+                      <Card key={driver.id}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-full bg-primary/10">
+                                <VehicleIcon className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-base">
+                                  {driver.driver_name || driver.profile?.full_name || 'Sem nome'}
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">
+                                  {driverOrders.length} entrega(s) na fila
+                                </p>
+                              </div>
+                            </div>
+                            <Badge className={driverStatusColor}>
+                              {driverStatusLabel}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {driverOrders.map((order, index) => (
+                              <div
+                                key={order.id}
+                                className={`p-3 rounded-lg border ${
+                                  index === 0 ? 'border-primary bg-primary/5' : 'border-border bg-muted/30'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      {index === 0 && (
+                                        <Badge variant="destructive" className="text-xs">Próxima</Badge>
+                                      )}
+                                      <span className="font-medium">#{order.id.slice(0, 8)}</span>
+                                      <Badge variant={order.status === 'out_for_delivery' ? 'default' : 'secondary'}>
+                                        {order.status === 'out_for_delivery' ? 'Em entrega' : order.status === 'awaiting_driver' ? 'Aguardando' : 'Pronto'}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm font-medium">{order.customer_name}</p>
+                                    <a
+                                      href={`tel:${order.customer_phone}`}
+                                      className="text-sm text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      <Phone className="h-3 w-3" />
+                                      {order.customer_phone}
+                                    </a>
+                                    {order.customer_addresses && (
+                                      <div className="mt-2 p-2 bg-muted rounded text-sm">
+                                        <div className="flex items-start gap-2">
+                                          <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="font-medium">
+                                              {order.customer_addresses.street}, {order.customer_addresses.number}
+                                            </p>
+                                            <p className="text-muted-foreground">
+                                              {order.customer_addresses.neighborhood} - {order.customer_addresses.city}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="mt-2 w-full"
+                                          onClick={() => {
+                                            const address = `${order.customer_addresses!.street}, ${order.customer_addresses!.number}, ${order.customer_addresses!.neighborhood}, ${order.customer_addresses!.city}`;
+                                            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+                                          }}
+                                        >
+                                          <Navigation className="h-4 w-4 mr-2" />
+                                          Abrir no Maps
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-bold text-lg">
+                                      R$ {order.total.toFixed(2).replace('.', ',')}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatDistanceToNow(new Date(order.created_at), { 
+                                        addSuffix: true, 
+                                        locale: ptBR 
+                                      })}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                  .filter(Boolean)}
               </div>
             )}
           </TabsContent>
