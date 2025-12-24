@@ -257,62 +257,97 @@ function PublicMenuContent() {
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      {/* Compact Header */}
-      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border">
-        <div className="flex items-center gap-3 p-3">
+      {/* Restaurant Header with Cover & Logo */}
+      <div className="relative">
+        {/* Cover Image */}
+        <div className="relative h-40 sm:h-52 bg-gradient-to-br from-primary/20 to-secondary">
+          {company.cover_url ? (
+            <img
+              src={company.cover_url}
+              alt={`Capa de ${company.name}`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full gradient-primary opacity-80" />
+          )}
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+          
+          {/* Back Button */}
           <Link 
             to="/" 
-            className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors active:scale-95"
+            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center hover:bg-background transition-colors active:scale-95 shadow-md"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          
-          <div className="flex-1 min-w-0 flex items-center gap-3">
-            {company.logo_url ? (
-              <img
-                src={company.logo_url}
-                alt={company.name}
-                className="w-10 h-10 rounded-xl object-cover border border-border flex-shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center flex-shrink-0">
-                <Store className="h-5 w-5 text-primary-foreground" />
-              </div>
-            )}
-            <div className="min-w-0">
-              <h1 className="font-display font-bold text-base truncate">{company.name}</h1>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+
+          {/* Track Order Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTrackOrderOpen(true)}
+            className="absolute top-4 right-4 h-10 w-10 p-0 rounded-full bg-background/90 backdrop-blur-sm hover:bg-background shadow-md"
+          >
+            <Package className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Restaurant Info Card */}
+        <div className="relative -mt-12 mx-4 p-4 bg-card rounded-2xl shadow-lg border border-border">
+          <div className="flex gap-4">
+            {/* Logo */}
+            <div className="flex-shrink-0 -mt-10">
+              {company.logo_url ? (
+                <img
+                  src={company.logo_url}
+                  alt={company.name}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-4 border-card shadow-md"
+                />
+              ) : (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl gradient-primary flex items-center justify-center border-4 border-card shadow-md">
+                  <Store className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0 pt-1">
+              <h1 className="font-display font-bold text-lg sm:text-xl truncate">{company.name}</h1>
+              {company.description && (
+                <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mt-0.5">{company.description}</p>
+              )}
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge
                   variant="secondary"
                   className={cn(
-                    'h-5 text-[10px] px-1.5',
+                    'h-6 text-xs px-2',
                     isActuallyOpen ? 'badge-open' : 'badge-closed'
                   )}
                 >
                   {isActuallyOpen ? 'Aberto' : 'Fechado'}
                 </Badge>
                 {todayHours && (
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {todayHours}
+                  </span>
+                )}
+                {company.delivery_fee !== null && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    Entrega R$ {Number(company.delivery_fee).toFixed(2)}
                   </span>
                 )}
               </div>
             </div>
           </div>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTrackOrderOpen(true)}
-            className="h-10 w-10 p-0 rounded-full"
-          >
-            <Package className="h-5 w-5" />
-          </Button>
         </div>
+      </div>
 
+      {/* Sticky Search & Categories */}
+      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border mt-4">
         {/* Search */}
-        <div className="px-3 pb-3">
+        <div className="px-4 py-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -332,11 +367,11 @@ function PublicMenuContent() {
           </div>
         </div>
 
-        {/* Categories - Sticky */}
+        {/* Categories - Horizontal Scroll */}
         {categories.length > 0 && (
           <div 
             ref={categoriesRef}
-            className="flex gap-2 overflow-x-auto px-3 pb-3 scrollbar-hide"
+            className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide"
           >
             <button
               onClick={() => scrollToCategory(null)}
