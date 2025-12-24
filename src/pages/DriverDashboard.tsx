@@ -12,6 +12,7 @@ import {
   PowerOff,
   RefreshCw,
   Bell,
+  LogOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,7 +62,7 @@ interface Order {
 }
 
 export default function DriverDashboard() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [driver, setDriver] = useState<any>(null);
@@ -217,9 +218,22 @@ export default function DriverDashboard() {
               <h1 className="font-semibold text-lg">Painel do Entregador</h1>
               <p className="text-sm text-muted-foreground">{driver?.driver_name}</p>
             </div>
-            <Badge variant={driver?.is_available ? 'default' : 'secondary'}>
-              {driver?.is_available ? 'Disponível' : 'Indisponível'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant={driver?.is_available ? 'default' : 'secondary'}>
+                {driver?.is_available ? 'Disponível' : 'Indisponível'}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  await signOut();
+                  navigate('/driver/login');
+                }}
+                title="Sair"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
