@@ -34,6 +34,7 @@ const statusLabels: Record<string, string> = {
   confirmed: 'Confirmado',
   preparing: 'Preparando',
   ready: 'Pronto',
+  awaiting_driver: 'Aguardando entregador',
   out_for_delivery: 'Em entrega',
   delivered: 'Entregue',
   cancelled: 'Cancelado',

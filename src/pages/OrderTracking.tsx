@@ -55,12 +55,13 @@ const statusConfig: Record<string, { label: string; icon: typeof Package; color:
   confirmed: { label: 'Pedido confirmado', icon: CheckCircle, color: '#3b82f6', step: 1 },
   preparing: { label: 'Em preparação', icon: ChefHat, color: '#f97316', step: 2 },
   ready: { label: 'Pronto para entrega', icon: Package, color: '#a855f7', step: 3 },
+  awaiting_driver: { label: 'Aguardando entregador', icon: Truck, color: '#8b5cf6', step: 3.5 },
   out_for_delivery: { label: 'Saiu para entrega', icon: Truck, color: '#06b6d4', step: 4 },
   delivered: { label: 'Entregue', icon: CircleCheck, color: '#22c55e', step: 5 },
   cancelled: { label: 'Cancelado', icon: XCircle, color: '#ef4444', step: -1 },
 };
 
-const statusSteps = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+const statusSteps = ['pending', 'confirmed', 'preparing', 'ready', 'awaiting_driver', 'out_for_delivery', 'delivered'];
 
 // Notification sound URL
 const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
