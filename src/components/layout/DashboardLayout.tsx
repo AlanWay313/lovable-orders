@@ -11,7 +11,6 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   ChevronDown,
   Ticket,
   Crown,
@@ -27,6 +26,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
+import { NotificationDropdown } from "./NotificationDropdown";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -180,10 +180,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex-1" />
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-          </Button>
+          <NotificationDropdown />
 
           {/* User menu */}
           <DropdownMenu>
