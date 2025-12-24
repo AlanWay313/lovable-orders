@@ -47,20 +47,19 @@ export function AddressSelector({ customerId, selectedAddressId, onSelect, onAdd
     
     setLoading(true);
     try {
-      // Get addresses directly by customer_id
-      const { data, error } = await supabase
-        .from('customer_addresses')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('is_default', { ascending: false })
-        .order('created_at', { ascending: false });
+      // Use Edge Function to bypass RLS (secure server-side lookup)
+      const { data: result, error } = await supabase.functions.invoke('get-customer-addresses', {
+        body: { customerId }
+      });
 
       if (error) throw error;
-      setAddresses(data || []);
+      
+      const data = result?.addresses || [];
+      setAddresses(data);
 
       // Auto-select default or first address
-      if (data && data.length > 0 && !selectedAddressId) {
-        const defaultAddr = data.find(a => a.is_default) || data[0];
+      if (data.length > 0 && !selectedAddressId) {
+        const defaultAddr = data.find((a: Address) => a.is_default) || data[0];
         onSelect(defaultAddr);
       }
     } catch (error) {
