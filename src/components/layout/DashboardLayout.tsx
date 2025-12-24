@@ -6,7 +6,6 @@ import {
   UtensilsCrossed,
   ShoppingBag,
   Truck,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -28,6 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { SidebarOrdersBadge } from "./SidebarOrdersBadge";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -123,6 +123,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <ul className="space-y-1">
               {filteredNavItems.map((item) => {
                 const isActive = location.pathname === item.href;
+                const isPedidos = item.href === "/dashboard/orders";
                 return (
                   <li key={item.href}>
                     <Link
@@ -136,7 +137,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       )}
                     >
                       <item.icon className="h-5 w-5" />
-                      {item.label}
+                      <span className="flex-1">{item.label}</span>
+                      {isPedidos && <SidebarOrdersBadge />}
                     </Link>
                   </li>
                 );
