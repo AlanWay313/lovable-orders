@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
@@ -11,8 +11,10 @@ import {
   Power,
   PowerOff,
   RefreshCw,
-  Bell,
   LogOut,
+  MapPinOff,
+  Play,
+  ThumbsUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +23,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useDriverLocation } from '@/hooks/useDriverLocation';
 import { useRealtimeDriverOrders } from '@/hooks/useRealtimeDriverOrders';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { toast } from 'sonner';
@@ -67,24 +68,96 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [driver, setDriver] = useState<any>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'pending' | 'granted' | 'denied' | 'unavailable'>('pending');
+  const [updatingOrder, setUpdatingOrder] = useState<string | null>(null);
   
-  const { startTracking, stopTracking } = useDriverLocation({ 
-    enabled: trackingEnabled,
-    updateInterval: 15000 
-  });
+  const watchIdRef = useRef<number | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const driverIdRef = useRef<string | null>(null);
+
+  // Update driver location in database
+  const updateLocation = useCallback(async (position: GeolocationPosition) => {
+    if (!driverIdRef.current) return;
+
+    const { latitude, longitude } = position.coords;
+    console.log('Updating driver location:', { latitude, longitude });
+
+    await supabase
+      .from('delivery_drivers')
+      .update({
+        current_latitude: latitude,
+        current_longitude: longitude,
+        location_updated_at: new Date().toISOString(),
+      })
+      .eq('id', driverIdRef.current);
+  }, []);
+
+  // Start location tracking
+  const startLocationTracking = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      toast.error('Geolocalização não suportada pelo navegador');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationStatus('granted');
+        updateLocation(position);
+        toast.success('Localização ativada');
+        
+        // Start continuous tracking
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          updateLocation,
+          (error) => console.error('Watch position error:', error),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+        );
+
+        // Fallback interval
+        intervalRef.current = setInterval(() => {
+          navigator.geolocation.getCurrentPosition(
+            updateLocation,
+            (error) => console.error('Interval position error:', error),
+            { enableHighAccuracy: true }
+          );
+        }, 15000);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationStatus('denied');
+          toast.error('Permissão de localização negada. Ative nas configurações do navegador.');
+        } else {
+          setLocationStatus('unavailable');
+          toast.error('Erro ao obter localização');
+        }
+      },
+      { enableHighAccuracy: true }
+    );
+  }, [updateLocation]);
+
+  // Stop location tracking
+  const stopLocationTracking = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
 
   // Realtime subscription for driver orders
   useRealtimeDriverOrders({
     driverId: driver?.id || null,
-    onOrderAssigned: (order) => {
-      // Reload orders when new order is assigned
+    onOrderAssigned: () => {
       loadDriverData();
     },
     onOrderUpdate: (updatedOrder) => {
       setOrders(prev => 
         prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o)
-          .filter(o => ['ready', 'out_for_delivery', 'awaiting_driver'].includes(o.status))
+          .filter(o => ['awaiting_driver', 'ready', 'out_for_delivery'].includes(o.status))
       );
     },
   });
@@ -95,13 +168,24 @@ export default function DriverDashboard() {
       return;
     }
     loadDriverData();
-  }, [user, navigate]);
+    
+    return () => {
+      stopLocationTracking();
+    };
+  }, [user, navigate, stopLocationTracking]);
+
+  // Request location permission on mount
+  useEffect(() => {
+    if (driver?.id && locationStatus === 'pending') {
+      driverIdRef.current = driver.id;
+      startLocationTracking();
+    }
+  }, [driver?.id, locationStatus, startLocationTracking]);
 
   const loadDriverData = useCallback(async () => {
     if (!user) return;
 
     try {
-      // Check if user is a driver
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
         .select('*')
@@ -117,8 +201,9 @@ export default function DriverDashboard() {
       }
 
       setDriver(driverData);
+      driverIdRef.current = driverData.id;
 
-      // Load assigned orders
+      // Load assigned orders - include awaiting_driver status
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -127,8 +212,8 @@ export default function DriverDashboard() {
           company:companies(name, address, phone, city)
         `)
         .eq('delivery_driver_id', driverData.id)
-        .in('status', ['ready', 'awaiting_driver', 'out_for_delivery'])
-        .order('created_at', { ascending: true }); // Ordenar por mais antigo primeiro (FIFO)
+        .in('status', ['awaiting_driver', 'ready', 'out_for_delivery'])
+        .order('created_at', { ascending: true });
 
       if (ordersError) throw ordersError;
 
@@ -152,7 +237,10 @@ export default function DriverDashboard() {
     const newStatus = !driver.is_available;
     const { error } = await supabase
       .from('delivery_drivers')
-      .update({ is_available: newStatus })
+      .update({ 
+        is_available: newStatus,
+        driver_status: newStatus ? 'available' : 'offline'
+      })
       .eq('id', driver.id);
 
     if (error) {
@@ -164,33 +252,87 @@ export default function DriverDashboard() {
     toast.success(newStatus ? 'Você está disponível para entregas' : 'Você está indisponível');
   };
 
-  const handleToggleTracking = (enabled: boolean) => {
-    setTrackingEnabled(enabled);
-    if (enabled) {
-      startTracking();
-      toast.success('Rastreamento ativado');
-    } else {
-      stopTracking();
-      toast.info('Rastreamento desativado');
+  // Accept delivery - changes status from awaiting_driver to ready
+  const acceptDelivery = async (orderId: string) => {
+    setUpdatingOrder(orderId);
+    
+    const { error: orderError } = await supabase
+      .from('orders')
+      .update({ status: 'ready' })
+      .eq('id', orderId);
+
+    if (orderError) {
+      toast.error('Erro ao aceitar entrega');
+      setUpdatingOrder(null);
+      return;
     }
+
+    // Update driver status to in_delivery
+    await supabase
+      .from('delivery_drivers')
+      .update({ driver_status: 'in_delivery' })
+      .eq('id', driver.id);
+
+    toast.success('Entrega aceita! Inicie quando estiver pronto.');
+    loadDriverData();
+    setUpdatingOrder(null);
   };
 
-  const updateOrderStatus = async (orderId: string, newStatus: 'ready' | 'out_for_delivery' | 'delivered') => {
+  // Start delivery - changes status to out_for_delivery
+  const startDelivery = async (orderId: string) => {
+    setUpdatingOrder(orderId);
+    
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'out_for_delivery' })
+      .eq('id', orderId);
+
+    if (error) {
+      toast.error('Erro ao iniciar entrega');
+      setUpdatingOrder(null);
+      return;
+    }
+
+    toast.success('Entrega iniciada! Boa viagem.');
+    loadDriverData();
+    setUpdatingOrder(null);
+  };
+
+  // Complete delivery
+  const completeDelivery = async (orderId: string) => {
+    setUpdatingOrder(orderId);
+    
     const { error } = await supabase
       .from('orders')
       .update({ 
-        status: newStatus,
-        ...(newStatus === 'delivered' ? { delivered_at: new Date().toISOString() } : {}),
+        status: 'delivered',
+        delivered_at: new Date().toISOString()
       })
       .eq('id', orderId);
 
     if (error) {
-      toast.error('Erro ao atualizar pedido');
+      toast.error('Erro ao concluir entrega');
+      setUpdatingOrder(null);
       return;
     }
 
-    toast.success(newStatus === 'delivered' ? 'Entrega confirmada!' : 'Status atualizado');
+    // Check if there are more pending orders for this driver
+    const remainingOrders = orders.filter(o => o.id !== orderId);
+    
+    // If no more orders, set driver back to available
+    if (remainingOrders.length === 0) {
+      await supabase
+        .from('delivery_drivers')
+        .update({ 
+          driver_status: 'available',
+          is_available: true
+        })
+        .eq('id', driver.id);
+    }
+
+    toast.success('Entrega concluída com sucesso!');
     loadDriverData();
+    setUpdatingOrder(null);
   };
 
   const formatCurrency = (value: number) => {
@@ -200,10 +342,64 @@ export default function DriverDashboard() {
     }).format(value);
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'awaiting_driver':
+        return <Badge variant="destructive">Aguardando Aceite</Badge>;
+      case 'ready':
+        return <Badge variant="secondary">Aceito - Aguardando Início</Badge>;
+      case 'out_for_delivery':
+        return <Badge variant="default">Em Entrega</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show location required screen if location is not granted
+  if (locationStatus === 'denied' || locationStatus === 'unavailable') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <MapPinOff className="h-16 w-16 mx-auto text-destructive mb-4" />
+            <CardTitle className="text-xl">Localização Necessária</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              {locationStatus === 'denied' 
+                ? 'Você precisa permitir o acesso à sua localização para usar o painel de entregas. Por favor, ative a permissão nas configurações do seu navegador.'
+                : 'Seu navegador não suporta geolocalização. Use um navegador moderno para acessar o painel de entregas.'
+              }
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => {
+                setLocationStatus('pending');
+                startLocationTracking();
+              }}>
+                <Navigation className="h-4 w-4 mr-2" />
+                Tentar Novamente
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  await signOut();
+                  navigate('/driver/login');
+                }}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -219,6 +415,10 @@ export default function DriverDashboard() {
               <p className="text-sm text-muted-foreground">{driver?.driver_name}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Badge variant={locationStatus === 'granted' ? 'default' : 'destructive'} className="gap-1">
+                <Navigation className="h-3 w-3" />
+                {locationStatus === 'granted' ? 'GPS Ativo' : 'GPS'}
+              </Badge>
               <Badge variant={driver?.is_available ? 'default' : 'secondary'}>
                 {driver?.is_available ? 'Disponível' : 'Indisponível'}
               </Badge>
@@ -226,6 +426,7 @@ export default function DriverDashboard() {
                 variant="ghost"
                 size="icon"
                 onClick={async () => {
+                  stopLocationTracking();
                   await signOut();
                   navigate('/driver/login');
                 }}
@@ -254,19 +455,15 @@ export default function DriverDashboard() {
               <Switch
                 checked={driver?.is_available}
                 onCheckedChange={toggleAvailability}
+                disabled={orders.length > 0}
               />
             </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Navigation className={`h-5 w-5 ${trackingEnabled ? 'text-blue-500' : 'text-muted-foreground'}`} />
-                <Label>Compartilhar localização</Label>
-              </div>
-              <Switch
-                checked={trackingEnabled}
-                onCheckedChange={handleToggleTracking}
-              />
-            </div>
+            
+            {orders.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                * Disponibilidade bloqueada enquanto houver entregas pendentes
+              </p>
+            )}
 
             <div className="pt-2 border-t border-border">
               <PushNotificationButton
@@ -284,7 +481,7 @@ export default function DriverDashboard() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Entregas Pendentes ({orders.length})
+              Entregas ({orders.length})
             </h2>
             <Button variant="outline" size="sm" onClick={loadDriverData}>
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -301,18 +498,19 @@ export default function DriverDashboard() {
             </Card>
           ) : (
             orders.map((order, index) => (
-              <Card key={order.id} className={index === 0 ? 'ring-2 ring-primary' : ''}>
+              <Card key={order.id} className={order.status === 'awaiting_driver' ? 'ring-2 ring-destructive animate-pulse' : index === 0 ? 'ring-2 ring-primary' : ''}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      {index === 0 && (
-                        <Badge variant="destructive" className="text-xs">Próxima</Badge>
+                      {order.status === 'awaiting_driver' && (
+                        <Badge variant="destructive" className="text-xs animate-bounce">Nova!</Badge>
+                      )}
+                      {order.status !== 'awaiting_driver' && index === 0 && (
+                        <Badge variant="outline" className="text-xs">Próxima</Badge>
                       )}
                       <CardTitle className="text-base">{order.company.name}</CardTitle>
                     </div>
-                    <Badge variant={order.status === 'out_for_delivery' ? 'default' : 'secondary'}>
-                      {order.status === 'out_for_delivery' ? 'Em entrega' : 'Pronto'}
-                    </Badge>
+                    {getStatusBadge(order.status)}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -426,13 +624,34 @@ export default function DriverDashboard() {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
+                    {order.status === 'awaiting_driver' && (
+                      <Button
+                        className="flex-1"
+                        size="lg"
+                        variant="destructive"
+                        onClick={() => acceptDelivery(order.id)}
+                        disabled={updatingOrder === order.id}
+                      >
+                        {updatingOrder === order.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <ThumbsUp className="h-4 w-4 mr-2" />
+                        )}
+                        Aceitar Entrega
+                      </Button>
+                    )}
                     {order.status === 'ready' && (
                       <Button
                         className="flex-1"
                         size="lg"
-                        onClick={() => updateOrderStatus(order.id, 'out_for_delivery')}
+                        onClick={() => startDelivery(order.id)}
+                        disabled={updatingOrder === order.id}
                       >
-                        <Navigation className="h-4 w-4 mr-2" />
+                        {updatingOrder === order.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4 mr-2" />
+                        )}
                         Iniciar Entrega
                       </Button>
                     )}
@@ -441,10 +660,15 @@ export default function DriverDashboard() {
                         className="flex-1"
                         size="lg"
                         variant="default"
-                        onClick={() => updateOrderStatus(order.id, 'delivered')}
+                        onClick={() => completeDelivery(order.id)}
+                        disabled={updatingOrder === order.id}
                       >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Confirmar Entrega
+                        {updatingOrder === order.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                        )}
+                        Concluir Entrega
                       </Button>
                     )}
                   </div>
