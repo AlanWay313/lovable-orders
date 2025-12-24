@@ -1,5 +1,20 @@
 import { useState, useEffect } from 'react';
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
   Plus,
   Edit,
   Trash2,
@@ -48,6 +63,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { ProductOptionsEditor } from '@/components/menu/ProductOptionsEditor';
+import { SortableProductCard } from '@/components/menu/SortableProductCard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,11 +87,24 @@ interface Product {
   is_featured: boolean;
   category_id: string | null;
   preparation_time_minutes: number;
+  sort_order: number;
 }
 
 export default function MenuManagement() {
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +191,7 @@ export default function MenuManagement() {
           .from('products')
           .select('*')
           .eq('company_id', company.id)
-          .order('created_at', { ascending: false }),
+          .order('sort_order', { ascending: true }),
       ]);
 
       if (categoriesRes.error) throw categoriesRes.error;
@@ -339,6 +368,58 @@ export default function MenuManagement() {
       loadCompanyAndData();
     } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  // Handle drag end for reordering products
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = displayedProducts.findIndex((p) => p.id === active.id);
+    const newIndex = displayedProducts.findIndex((p) => p.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+    
+    // Reorder locally first for immediate feedback
+    const newOrder = arrayMove(displayedProducts, oldIndex, newIndex);
+    
+    // Update the full products array with new sort orders
+    const updatedProducts = products.map((p) => {
+      const newPosition = newOrder.findIndex((np) => np.id === p.id);
+      if (newPosition !== -1) {
+        return { ...p, sort_order: newPosition };
+      }
+      return p;
+    });
+    
+    setProducts(updatedProducts);
+    
+    // Save to database
+    try {
+      const updates = newOrder.map((product, index) => ({
+        id: product.id,
+        sort_order: index,
+      }));
+      
+      // Update each product's sort_order
+      for (const update of updates) {
+        await supabase
+          .from('products')
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id);
+      }
+      
+      toast({ title: 'Ordem atualizada' });
+    } catch (error: any) {
+      console.error('Error updating order:', error);
+      toast({
+        title: 'Erro ao salvar ordem',
+        description: error.message,
+        variant: 'destructive',
+      });
+      loadCompanyAndData(); // Reload on error
     }
   };
 
@@ -542,155 +623,47 @@ export default function MenuManagement() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {displayedProducts.map((product) => {
-                  const category = categories.find((c) => c.id === product.category_id);
-                  return (
-                    <Card key={product.id} className={`transition-all hover:shadow-md ${!product.is_active ? 'opacity-60' : ''}`}>
-                      <CardContent className="p-4">
-                        <div className="flex gap-4">
-                          {/* Product Image */}
-                          {product.image_url ? (
-                            <img
-                              src={product.image_url}
-                              alt={product.name}
-                              className="w-24 h-24 lg:w-32 lg:h-32 rounded-xl object-cover flex-shrink-0 border"
-                            />
-                          ) : (
-                            <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 border-2 border-dashed">
-                              <Package className="h-10 w-10 text-muted-foreground" />
-                            </div>
-                          )}
-
-                          {/* Product Info */}
-                          <div className="flex-1 min-w-0 space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="space-y-1">
-                                <h3 className="font-semibold text-lg">{product.name}</h3>
-                                {product.description && (
-                                  <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {product.description}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-xl font-bold text-primary whitespace-nowrap">
-                                  R$ {Number(product.price).toFixed(2)}
-                                </p>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => openProductModal(product)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Editar Produto
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => setOptionsEditor({
-                                        open: true,
-                                        productId: product.id,
-                                        productName: product.name,
-                                      })}
-                                    >
-                                      <Settings2 className="h-4 w-4 mr-2" />
-                                      Opções e Adicionais
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => toggleProductActive(product)}>
-                                      {product.is_active ? (
-                                        <>
-                                          <EyeOff className="h-4 w-4 mr-2" />
-                                          Desativar
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Eye className="h-4 w-4 mr-2" />
-                                          Ativar
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => toggleProductFeatured(product)}>
-                                      <Star className={`h-4 w-4 mr-2 ${product.is_featured ? 'fill-current' : ''}`} />
-                                      {product.is_featured ? 'Remover Destaque' : 'Destacar'}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        setDeleteModal({
-                                          open: true,
-                                          type: 'product',
-                                          id: product.id,
-                                          name: product.name,
-                                        })
-                                      }
-                                      className="text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Excluir
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-
-                            {/* Product Details */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {category && (
-                                <Badge variant="outline" className="gap-1">
-                                  <FolderOpen className="h-3 w-3" />
-                                  {category.name}
-                                </Badge>
-                              )}
-                              {product.preparation_time_minutes && (
-                                <Badge variant="secondary" className="gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {product.preparation_time_minutes} min
-                                </Badge>
-                              )}
-                              {!product.is_active && (
-                                <Badge variant="destructive">Inativo</Badge>
-                              )}
-                              {product.is_featured && (
-                                <Badge className="bg-warning/10 text-warning border-warning/30 gap-1">
-                                  <Star className="h-3 w-3 fill-current" />
-                                  Destaque
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* Quick Actions */}
-                            <div className="flex gap-2 pt-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openProductModal(product)}
-                              >
-                                <Edit className="h-3 w-3 mr-1" />
-                                Editar
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setOptionsEditor({
-                                  open: true,
-                                  productId: product.id,
-                                  productName: product.name,
-                                })}
-                              >
-                                <Settings2 className="h-3 w-3 mr-1" />
-                                Opções
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={displayedProducts.map((p) => p.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <GripVertical className="h-4 w-4" />
+                      Arraste os produtos para reorganizar a ordem de exibição
+                    </p>
+                    {displayedProducts.map((product) => {
+                      const category = categories.find((c) => c.id === product.category_id);
+                      return (
+                        <SortableProductCard
+                          key={product.id}
+                          product={product}
+                          category={category}
+                          onEdit={openProductModal}
+                          onToggleActive={toggleProductActive}
+                          onToggleFeatured={toggleProductFeatured}
+                          onOpenOptions={(p) => setOptionsEditor({
+                            open: true,
+                            productId: p.id,
+                            productName: p.name,
+                          })}
+                          onDelete={(p) => setDeleteModal({
+                            open: true,
+                            type: 'product',
+                            id: p.id,
+                            name: p.name,
+                          })}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </TabsContent>
 
