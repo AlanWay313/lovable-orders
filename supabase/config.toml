@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.driver-direct-login]
 verify_jwt = false
+
+[functions.lookup-customer]
+verify_jwt = false
