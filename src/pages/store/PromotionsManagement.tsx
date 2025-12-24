@@ -13,17 +13,16 @@ import {
   Package,
   ToggleLeft,
   ToggleRight,
-  Image as ImageIcon,
+  Pencil,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -78,6 +77,7 @@ export default function PromotionsManagement() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
 
   const {
     register,
@@ -85,6 +85,7 @@ export default function PromotionsManagement() {
     formState: { errors },
     reset,
     watch,
+    setValue,
   } = useForm<PromotionFormData>({
     resolver: zodResolver(promotionSchema),
     defaultValues: {
@@ -154,6 +155,44 @@ export default function PromotionsManagement() {
     }
   };
 
+  const openCreateDialog = () => {
+    setEditingPromotion(null);
+    setImageUrl(null);
+    reset({
+      name: '',
+      description: '',
+      discount_type: 'percentage',
+      discount_value: 0,
+      product_id: '',
+      category_id: '',
+      expires_at: '',
+    });
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (promotion: Promotion) => {
+    setEditingPromotion(promotion);
+    setImageUrl(promotion.image_url);
+    
+    // Format datetime for input
+    let expiresAt = '';
+    if (promotion.expires_at) {
+      const date = new Date(promotion.expires_at);
+      expiresAt = date.toISOString().slice(0, 16);
+    }
+
+    reset({
+      name: promotion.name,
+      description: promotion.description || '',
+      discount_type: promotion.discount_type as 'percentage' | 'fixed',
+      discount_value: promotion.discount_value,
+      product_id: promotion.product_id || '',
+      category_id: promotion.category_id || '',
+      expires_at: expiresAt,
+    });
+    setDialogOpen(true);
+  };
+
   const onSubmit = async (data: PromotionFormData) => {
     if (!companyId) return;
 
@@ -171,25 +210,42 @@ export default function PromotionsManagement() {
         expires_at: data.expires_at || null,
       };
 
-      const { error } = await supabase
-        .from('promotions')
-        .insert(promotionData);
+      if (editingPromotion) {
+        // Update existing promotion
+        const { error } = await supabase
+          .from('promotions')
+          .update(promotionData)
+          .eq('id', editingPromotion.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: 'Promoção criada!',
-        description: 'A promoção está ativa no seu cardápio',
-      });
+        toast({
+          title: 'Promoção atualizada!',
+          description: 'As alterações foram salvas',
+        });
+      } else {
+        // Create new promotion
+        const { error } = await supabase
+          .from('promotions')
+          .insert(promotionData);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Promoção criada!',
+          description: 'A promoção está ativa no seu cardápio',
+        });
+      }
 
       reset();
       setImageUrl(null);
+      setEditingPromotion(null);
       setDialogOpen(false);
       loadData();
     } catch (error: any) {
-      console.error('Error creating promotion:', error);
+      console.error('Error saving promotion:', error);
       toast({
-        title: 'Erro ao criar promoção',
+        title: 'Erro ao salvar promoção',
         description: error.message,
         variant: 'destructive',
       });
@@ -289,142 +345,149 @@ export default function PromotionsManagement() {
               Crie promoções para atrair mais clientes
             </p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gradient-primary text-primary-foreground">
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Promoção
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Criar Promoção</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <Button onClick={openCreateDialog} className="gradient-primary text-primary-foreground">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Promoção
+          </Button>
+        </div>
+
+        {/* Dialog for Create/Edit */}
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingPromotion(null);
+          }
+        }}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingPromotion ? 'Editar Promoção' : 'Criar Promoção'}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome da Promoção *</Label>
+                <Input
+                  id="name"
+                  placeholder="Ex: Combo da Semana"
+                  {...register('name')}
+                />
+                {errors.name && (
+                  <p className="text-sm text-destructive">{errors.name.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrição</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Descreva a promoção..."
+                  rows={2}
+                  {...register('description')}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nome da Promoção *</Label>
-                  <Input
-                    id="name"
-                    placeholder="Ex: Combo da Semana"
-                    {...register('name')}
-                  />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name.message}</p>
+                  <Label htmlFor="discount_type">Tipo de Desconto *</Label>
+                  <select
+                    id="discount_type"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {...register('discount_type')}
+                  >
+                    <option value="percentage">Porcentagem (%)</option>
+                    <option value="fixed">Valor Fixo (R$)</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="discount_value">
+                    Valor do Desconto *
+                  </Label>
+                  <div className="relative">
+                    {discountType === 'percentage' ? (
+                      <Percent className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    )}
+                    <Input
+                      id="discount_value"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="0"
+                      className="pl-9"
+                      {...register('discount_value')}
+                    />
+                  </div>
+                  {errors.discount_value && (
+                    <p className="text-sm text-destructive">{errors.discount_value.message}</p>
                   )}
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="description">Descrição</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Descreva a promoção..."
-                    rows={2}
-                    {...register('description')}
-                  />
+                  <Label htmlFor="product_id">Produto (opcional)</Label>
+                  <select
+                    id="product_id"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {...register('product_id')}
+                  >
+                    <option value="">Todos os produtos</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="discount_type">Tipo de Desconto *</Label>
-                    <select
-                      id="discount_type"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      {...register('discount_type')}
-                    >
-                      <option value="percentage">Porcentagem (%)</option>
-                      <option value="fixed">Valor Fixo (R$)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="discount_value">
-                      Valor do Desconto *
-                    </Label>
-                    <div className="relative">
-                      {discountType === 'percentage' ? (
-                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      )}
-                      <Input
-                        id="discount_value"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        placeholder="0"
-                        className="pl-9"
-                        {...register('discount_value')}
-                      />
-                    </div>
-                    {errors.discount_value && (
-                      <p className="text-sm text-destructive">{errors.discount_value.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="product_id">Produto (opcional)</Label>
-                    <select
-                      id="product_id"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      {...register('product_id')}
-                    >
-                      <option value="">Todos os produtos</option>
-                      {products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="category_id">Categoria (opcional)</Label>
-                    <select
-                      id="category_id"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      {...register('category_id')}
-                    >
-                      <option value="">Todas as categorias</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="expires_at">Data de Expiração (opcional)</Label>
-                  <Input
-                    id="expires_at"
-                    type="datetime-local"
-                    {...register('expires_at')}
-                  />
+                  <Label htmlFor="category_id">Categoria (opcional)</Label>
+                  <select
+                    id="category_id"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    {...register('category_id')}
+                  >
+                    <option value="">Todas as categorias</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <Label>Imagem da Promoção (opcional)</Label>
-                  <ImageUpload
-                    value={imageUrl}
-                    onChange={setImageUrl}
-                    folder={user?.id || 'temp'}
-                    aspectRatio="video"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="expires_at">Data de Expiração (opcional)</Label>
+                <Input
+                  id="expires_at"
+                  type="datetime-local"
+                  {...register('expires_at')}
+                />
+              </div>
 
-                <Button
-                  type="submit"
-                  className="w-full gradient-primary text-primary-foreground"
-                  disabled={saving}
-                >
-                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Criar Promoção
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+              <div className="space-y-2">
+                <Label>Imagem da Promoção (opcional)</Label>
+                <ImageUpload
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  folder={user?.id || 'temp'}
+                  aspectRatio="video"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full gradient-primary text-primary-foreground"
+                disabled={saving}
+              >
+                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {editingPromotion ? 'Salvar Alterações' : 'Criar Promoção'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Promotions List */}
         {promotions.length === 0 ? (
@@ -437,7 +500,7 @@ export default function PromotionsManagement() {
               <p className="text-muted-foreground mb-4">
                 Crie sua primeira promoção para atrair mais clientes
               </p>
-              <Button onClick={() => setDialogOpen(true)} variant="outline">
+              <Button onClick={openCreateDialog} variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
                 Criar Promoção
               </Button>
@@ -505,6 +568,15 @@ export default function PromotionsManagement() {
                       </div>
 
                       <div className="flex items-center gap-2 mt-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(promotion)}
+                          className="h-8 px-2"
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
