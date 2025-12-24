@@ -16,6 +16,7 @@ import MenuManagement from "./pages/store/MenuManagement";
 import OrdersManagement from "./pages/store/OrdersManagement";
 import DriversManagement from "./pages/store/DriversManagement";
 import CouponsManagement from "./pages/store/CouponsManagement";
+import PromotionsManagement from "./pages/store/PromotionsManagement";
 import UserSettings from "./pages/store/UserSettings";
 import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
@@ -85,6 +86,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CouponsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/promotions"
+              element={
+                <ProtectedRoute>
+                  <PromotionsManagement />
                 </ProtectedRoute>
               }
             />
