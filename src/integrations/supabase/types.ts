@@ -319,6 +319,7 @@ export type Database = {
           current_longitude: number | null
           driver_name: string | null
           driver_phone: string | null
+          driver_status: string | null
           email: string | null
           id: string
           is_active: boolean | null
@@ -336,6 +337,7 @@ export type Database = {
           current_longitude?: number | null
           driver_name?: string | null
           driver_phone?: string | null
+          driver_status?: string | null
           email?: string | null
           id?: string
           is_active?: boolean | null
@@ -353,6 +355,7 @@ export type Database = {
           current_longitude?: number | null
           driver_name?: string | null
           driver_phone?: string | null
+          driver_status?: string | null
           email?: string | null
           id?: string
           is_active?: boolean | null

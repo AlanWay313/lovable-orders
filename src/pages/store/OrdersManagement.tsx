@@ -67,6 +67,14 @@ interface DeliveryAddress {
   reference: string | null;
 }
 
+interface DeliveryDriver {
+  id: string;
+  driver_name: string | null;
+  driver_phone: string | null;
+  is_available: boolean;
+  driver_status: string | null;
+}
+
 interface Order {
   id: string;
   created_at: string;
@@ -80,8 +88,10 @@ interface Order {
   delivery_fee: number;
   total: number;
   notes: string | null;
+  delivery_driver_id: string | null;
   order_items?: OrderItem[];
   customer_addresses?: DeliveryAddress;
+  delivery_driver?: DeliveryDriver;
 }
 
 const statusConfig: Record<OrderStatus, { label: string; icon: typeof Clock; color: string }> = {
@@ -89,6 +99,7 @@ const statusConfig: Record<OrderStatus, { label: string; icon: typeof Clock; col
   confirmed: { label: 'Confirmado', icon: CheckCircle, color: 'bg-blue-500' },
   preparing: { label: 'Preparando', icon: ChefHat, color: 'bg-orange-500' },
   ready: { label: 'Pronto', icon: Package, color: 'bg-purple-500' },
+  awaiting_driver: { label: 'Aguardando Entregador', icon: Truck, color: 'bg-amber-500' },
   out_for_delivery: { label: 'Em entrega', icon: Truck, color: 'bg-cyan-500' },
   delivered: { label: 'Entregue', icon: CheckCircle, color: 'bg-green-500' },
   cancelled: { label: 'Cancelado', icon: XCircle, color: 'bg-red-500' },
@@ -101,7 +112,7 @@ const paymentMethodLabels: Record<PaymentMethod, string> = {
   online: 'Cartão online',
 };
 
-const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
+const statusFlow: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'awaiting_driver', 'out_for_delivery', 'delivered'];
 
 export default function OrdersManagement() {
   const { user } = useAuth();
@@ -114,10 +125,19 @@ export default function OrdersManagement() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('active');
+  const [availableDrivers, setAvailableDrivers] = useState<DeliveryDriver[]>([]);
+  const [assigningDriver, setAssigningDriver] = useState(false);
 
   useEffect(() => {
     loadCompanyAndOrders();
   }, [user]);
+
+  // Load available drivers when company is set
+  useEffect(() => {
+    if (companyId) {
+      loadAvailableDrivers();
+    }
+  }, [companyId]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -214,6 +234,54 @@ export default function OrdersManagement() {
     }
   };
 
+  const loadAvailableDrivers = async () => {
+    if (!companyId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('delivery_drivers')
+        .select('id, driver_name, driver_phone, is_available, driver_status')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .order('driver_name');
+
+      if (error) throw error;
+      setAvailableDrivers(data || []);
+    } catch (error) {
+      console.error('Error loading drivers:', error);
+    }
+  };
+
+  const assignDriverToOrder = async (orderId: string, driverId: string) => {
+    if (!companyId) return;
+    
+    setAssigningDriver(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('assign-driver', {
+        body: { orderId, driverId, companyId }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Entregador atribuído',
+        description: data.driverName ? `${data.driverName} foi atribuído ao pedido` : 'Entregador atribuído com sucesso',
+      });
+
+      // Reload orders to get updated data
+      loadCompanyAndOrders();
+      setSelectedOrder(null);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao atribuir entregador',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setAssigningDriver(false);
+    }
+  };
+
   const loadOrderDetails = async (orderId: string) => {
     const { data, error } = await supabase
       .from('orders')
@@ -293,6 +361,7 @@ export default function OrdersManagement() {
     confirmed: filteredOrders.filter((o) => o.status === 'confirmed'),
     preparing: filteredOrders.filter((o) => o.status === 'preparing'),
     ready: filteredOrders.filter((o) => o.status === 'ready'),
+    awaiting_driver: filteredOrders.filter((o) => o.status === 'awaiting_driver'),
     out_for_delivery: filteredOrders.filter((o) => o.status === 'out_for_delivery'),
   };
 
@@ -374,8 +443,8 @@ export default function OrdersManagement() {
 
           <TabsContent value="active" className="mt-6">
             {/* Kanban-style view for active orders */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {(['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] as OrderStatus[]).map(
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {(['pending', 'confirmed', 'preparing', 'ready', 'awaiting_driver', 'out_for_delivery'] as OrderStatus[]).map(
                 (status) => (
                   <div key={status} className="space-y-3">
                     <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Bell, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, Check, Loader2, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,15 +30,27 @@ export function NotificationDropdown() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length + pendingOrdersCount;
+
+  // Initialize audio for notifications
+  useEffect(() => {
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    audioRef.current.volume = 0.5;
+    return () => {
+      audioRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
       loadNotifications();
+      loadPendingOrdersCount();
       
       // Subscribe to realtime notifications
-      const channel = supabase
+      const notificationsChannel = supabase
         .channel('notifications-changes')
         .on(
           'postgres_changes',
@@ -50,12 +62,33 @@ export function NotificationDropdown() {
           },
           (payload) => {
             setNotifications(prev => [payload.new as Notification, ...prev]);
+            // Play sound for new notifications
+            if (audioRef.current) {
+              audioRef.current.play().catch(console.error);
+            }
+          }
+        )
+        .subscribe();
+
+      // Subscribe to orders for pending count (for store owners)
+      const ordersChannel = supabase
+        .channel('orders-pending-count')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'orders',
+          },
+          () => {
+            loadPendingOrdersCount();
           }
         )
         .subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(notificationsChannel);
+        supabase.removeChannel(ordersChannel);
       };
     }
   }, [user]);
@@ -78,6 +111,34 @@ export function NotificationDropdown() {
       console.error('Error loading notifications:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingOrdersCount = async () => {
+    if (!user) return;
+    
+    try {
+      // Get user's company
+      const { data: company } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle();
+      
+      if (!company) return;
+
+      // Count pending orders
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', company.id)
+        .eq('status', 'pending');
+
+      if (!error && count !== null) {
+        setPendingOrdersCount(count);
+      }
+    } catch (error) {
+      console.error('Error loading pending orders count:', error);
     }
   };
 
