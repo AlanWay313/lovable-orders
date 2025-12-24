@@ -16,7 +16,8 @@ import {
   X,
   ChevronRight,
   Flame,
-  Check
+  Check,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,6 +78,36 @@ interface Product {
   }[];
 }
 
+interface Promotion {
+  id: string;
+  name: string;
+  description: string | null;
+  discount_type: string;
+  discount_value: number;
+  product_id: string | null;
+  category_id: string | null;
+  image_url: string | null;
+  is_active: boolean;
+  expires_at: string | null;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  image_url: string | null;
+  is_active: boolean;
+  is_featured: boolean;
+  category_id: string | null;
+  product_options?: {
+    id: string;
+    name: string;
+    price_modifier: number;
+    is_required: boolean;
+  }[];
+}
+
 function PublicMenuContent() {
   const { slug } = useParams<{ slug: string }>();
   const { setCompanySlug, items, itemCount, subtotal, addItem, updateQuantity, removeItem } = useCart();
@@ -85,6 +116,7 @@ function PublicMenuContent() {
   const [company, setCompany] = useState<Company | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,14 +167,24 @@ function PublicMenuContent() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      const { data: productsData, error: productsError } = await supabase
-        .from('products')
-        .select(`*, product_options (*)`)
-        .eq('company_id', companyData.id)
-        .eq('is_active', true);
+      const [productsRes, promotionsRes] = await Promise.all([
+        supabase
+          .from('products')
+          .select(`*, product_options (*)`)
+          .eq('company_id', companyData.id)
+          .eq('is_active', true),
+        supabase
+          .from('promotions')
+          .select('*')
+          .eq('company_id', companyData.id)
+          .eq('is_active', true),
+      ]);
 
-      if (productsError) throw productsError;
-      setProducts(productsData || []);
+      if (productsRes.error) throw productsRes.error;
+      if (promotionsRes.error) throw promotionsRes.error;
+
+      setProducts(productsRes.data || []);
+      setPromotions(promotionsRes.data || []);
     } catch (err: any) {
       console.error('Error loading menu:', err);
       setError(err.message || 'Erro ao carregar cardápio');
@@ -435,6 +477,49 @@ function PublicMenuContent() {
                 <p className="text-xs text-muted-foreground">{storeStatus.nextOpenTime}</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Promotions Banner - Horizontal Scroll */}
+      {promotions.length > 0 && !searchQuery && !selectedCategory && (
+        <div className="mt-6">
+          <div className="flex items-center gap-2 px-4 mb-3">
+            <Tag className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-display font-bold">Promoções</h2>
+          </div>
+          <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+            {promotions.map((promo) => (
+              <div 
+                key={promo.id}
+                className="flex-shrink-0 w-72 p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20"
+              >
+                <div className="flex gap-3">
+                  {promo.image_url ? (
+                    <img
+                      src={promo.image_url}
+                      alt={promo.name}
+                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                      <Tag className="h-6 w-6 text-primary" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <Badge className="mb-1.5 bg-primary/90 text-primary-foreground">
+                      {promo.discount_type === 'percentage' 
+                        ? `${promo.discount_value}% OFF` 
+                        : `R$ ${Number(promo.discount_value).toFixed(2)} OFF`}
+                    </Badge>
+                    <h3 className="font-semibold text-sm truncate">{promo.name}</h3>
+                    {promo.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{promo.description}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

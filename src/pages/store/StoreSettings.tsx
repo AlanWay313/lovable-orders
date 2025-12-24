@@ -339,35 +339,85 @@ export default function StoreSettings() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Images */}
-          <Card>
-            <CardHeader>
+          {/* Visual Store Preview */}
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-3">
               <CardTitle className="text-lg font-display flex items-center gap-2">
                 <Store className="h-5 w-5 text-primary" />
-                Imagens
+                Identidade Visual
               </CardTitle>
-              <CardDescription>Logo e capa da sua loja</CardDescription>
+              <CardDescription>Logo e capa da sua loja - veja como ficará no cardápio</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <Label className="mb-2 block">Logo</Label>
-                  <ImageUpload
-                    value={logoUrl}
-                    onChange={setLogoUrl}
-                    folder={user?.id || 'temp'}
-                    aspectRatio="square"
-                    className="max-w-[200px]"
-                  />
+            <CardContent className="p-0">
+              {/* Preview Section */}
+              <div className="relative">
+                {/* Cover Preview */}
+                <div className="relative h-32 sm:h-40 bg-gradient-to-br from-primary/20 to-secondary/20">
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt="Capa da loja"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-secondary/10">
+                      <span className="text-muted-foreground text-sm">Capa da loja</span>
+                    </div>
+                  )}
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
                 </div>
-                <div>
-                  <Label className="mb-2 block">Capa</Label>
-                  <ImageUpload
-                    value={coverUrl}
-                    onChange={setCoverUrl}
-                    folder={user?.id || 'temp'}
-                    aspectRatio="video"
-                  />
+
+                {/* Logo Preview - overlapping */}
+                <div className="absolute -bottom-10 left-6">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt="Logo da loja"
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-4 border-card shadow-lg bg-card"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-primary/10 flex items-center justify-center border-4 border-card shadow-lg">
+                      <Store className="h-8 w-8 text-primary" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload Controls */}
+              <div className="px-6 pt-14 pb-6 space-y-6">
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="font-medium">Logo da Loja</Label>
+                      <span className="text-xs text-muted-foreground">Recomendado: 200x200px</span>
+                    </div>
+                    <ImageUpload
+                      value={logoUrl}
+                      onChange={setLogoUrl}
+                      folder={user?.id || 'temp'}
+                      aspectRatio="square"
+                      className="max-w-[180px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Formato quadrado, aparece no cardápio e pedidos
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="font-medium">Capa / Banner</Label>
+                      <span className="text-xs text-muted-foreground">Recomendado: 1200x400px</span>
+                    </div>
+                    <ImageUpload
+                      value={coverUrl}
+                      onChange={setCoverUrl}
+                      folder={user?.id || 'temp'}
+                      aspectRatio="video"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Imagem de destaque no topo do cardápio
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
