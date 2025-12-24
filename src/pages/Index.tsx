@@ -62,35 +62,48 @@ const features = [
 
 const pricingPlans = [
   {
-    name: 'Starter',
-    price: 'R$ 79',
+    name: 'Gratuito',
+    price: 'R$ 0',
+    description: 'Para começar',
+    features: [
+      'Até 1.000 pedidos/mês',
+      'Cardápio digital',
+      'Gestão de pedidos',
+      'Notificações em tempo real',
+    ],
+  },
+  {
+    name: 'Básico',
+    price: 'R$ 29,90',
     description: 'Para pequenos negócios',
-    features: ['1 loja', 'Cardápio ilimitado', 'Pedidos ilimitados', 'Suporte por email'],
+    features: [
+      'Até 2.000 pedidos/mês',
+      'Cupons de desconto',
+      'Relatórios avançados',
+      'Suporte prioritário',
+    ],
   },
   {
     name: 'Pro',
-    price: 'R$ 149',
+    price: 'R$ 49,90',
     description: 'Para negócios em crescimento',
     features: [
-      'Até 3 lojas',
-      'Cardápio ilimitado',
-      'Pedidos ilimitados',
-      'Sistema de delivery',
-      'Relatórios avançados',
-      'Suporte prioritário',
+      'Até 5.000 pedidos/mês',
+      'Múltiplos entregadores',
+      'Integrações avançadas',
+      'API personalizada',
     ],
     popular: true,
   },
   {
     name: 'Enterprise',
-    price: 'Sob consulta',
+    price: 'R$ 99,90',
     description: 'Para grandes operações',
     features: [
-      'Lojas ilimitadas',
-      'Tudo do Pro',
-      'API personalizada',
-      'Integração ERP',
+      'Pedidos ilimitados',
       'Gerente de conta dedicado',
+      'SLA garantido',
+      'Customizações sob demanda',
     ],
   },
 ];
@@ -317,7 +330,7 @@ export default function Index() {
               Escolha o plano ideal para o seu negócio
             </p>
           </div>
-          <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
             {pricingPlans.map((plan) => (
               <div
                 key={plan.name}
