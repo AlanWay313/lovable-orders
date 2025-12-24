@@ -396,9 +396,12 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
 
       // If using a new address or guest checkout, create address
       if (showAddressForm || !selectedAddress) {
-        const { data: addressData, error: addressError } = await supabase
+        const newAddressId = crypto.randomUUID();
+
+        const { error: addressError } = await supabase
           .from('customer_addresses')
           .insert({
+            id: newAddressId,
             customer_id: customerId, // Link directly to customer
             user_id: null,
             session_id: customerId ? null : `guest-${crypto.randomUUID()}`,
@@ -412,12 +415,10 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
             reference: data.reference || null,
             label: data.addressLabel || 'Casa',
             is_default: !selectedAddress,
-          })
-          .select()
-          .single();
+          });
 
         if (addressError) throw addressError;
-        addressId = addressData.id;
+        addressId = newAddressId;
       } else if (selectedAddress && customerId && !selectedAddress.customer_id) {
         // Update existing address to link to customer if not already linked
         await supabase
