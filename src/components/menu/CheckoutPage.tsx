@@ -341,21 +341,40 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
       // First, get or create customer record
       let customerId: string | null = loggedCustomer?.id || null;
       
-      if (!customerId && (data.customerEmail || data.customerPhone)) {
+      if (!customerId) {
         const cleanPhone = data.customerPhone.replace(/\D/g, '');
         
-        // Try to find existing customer by email or phone
-        const { data: existingCustomer } = await supabase
-          .from('customers')
-          .select('id')
-          .or(`email.eq.${data.customerEmail?.toLowerCase()},phone.eq.${cleanPhone}`)
-          .maybeSingle();
-
-        if (existingCustomer) {
-          customerId = existingCustomer.id;
-        } else {
-          // Create new customer
-          const { data: newCustomer } = await supabase
+        // Try to find existing customer via edge function (RLS prevents direct query)
+        if (data.customerEmail) {
+          try {
+            const { data: lookupResult } = await supabase.functions.invoke('lookup-customer', {
+              body: { email: data.customerEmail.toLowerCase() }
+            });
+            if (lookupResult?.customerId) {
+              customerId = lookupResult.customerId;
+            }
+          } catch (e) {
+            // Customer not found, will create new
+          }
+        }
+        
+        // If not found by email, try by phone
+        if (!customerId && cleanPhone) {
+          try {
+            const { data: lookupResult } = await supabase.functions.invoke('lookup-customer', {
+              body: { phone: cleanPhone }
+            });
+            if (lookupResult?.customerId) {
+              customerId = lookupResult.customerId;
+            }
+          } catch (e) {
+            // Customer not found, will create new
+          }
+        }
+        
+        // If still no customer found, create new one
+        if (!customerId) {
+          const { data: newCustomer, error: customerError } = await supabase
             .from('customers')
             .insert({
               name: data.customerName,
@@ -365,7 +384,9 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
             .select()
             .single();
           
-          if (newCustomer) {
+          if (customerError) {
+            console.error('Error creating customer:', customerError);
+          } else if (newCustomer) {
             customerId = newCustomer.id;
           }
         }

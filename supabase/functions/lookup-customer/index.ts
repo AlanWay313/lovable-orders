@@ -76,10 +76,10 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Build query - only return minimal data needed
+    // Build query - return data needed for checkout
     let query = supabase
       .from('customers')
-      .select('id, name')
+      .select('id, name, email, phone')
       .limit(1);
 
     if (email) {
@@ -107,14 +107,17 @@ serve(async (req) => {
       );
     }
 
-    // Only return customer ID and first name (not full personal data)
+    // Return customer data needed for checkout
     console.log(`[LOOKUP-CUSTOMER] Customer found for ${email ? 'email' : 'phone'} lookup`);
     
     return new Response(
       JSON.stringify({ 
         found: true, 
         customerId: customer.id,
-        firstName: customer.name?.split(' ')[0] || 'Cliente'
+        firstName: customer.name?.split(' ')[0] || 'Cliente',
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

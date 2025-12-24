@@ -75,20 +75,18 @@ export function CustomerAuthModal({ open, onClose, onSuccess }: CustomerAuthModa
       if (error) throw error;
 
       if (result?.found && result?.customerId) {
-        // Fetch full customer data using the secure customer ID
-        const { data: customer, error: fetchError } = await supabase
-          .from('customers')
-          .select('id, name, email, phone')
-          .eq('id', result.customerId)
-          .maybeSingle();
-
-        if (fetchError) throw fetchError;
-
-        if (customer) {
-          toast.success(`Bem-vindo de volta, ${result.firstName}!`);
-          onSuccess(customer);
-          handleClose();
-        }
+        toast.success(`Bem-vindo de volta, ${result.firstName}!`);
+        
+        // Use data from lookup result
+        const customer: CustomerData = {
+          id: result.customerId,
+          name: result.name || result.firstName,
+          email: result.email || data.email.toLowerCase().trim(),
+          phone: result.phone || '',
+        };
+        
+        onSuccess(customer);
+        handleClose();
       } else {
         toast.error('Email não encontrado. Faça seu primeiro pedido para se cadastrar.');
       }
@@ -117,20 +115,18 @@ export function CustomerAuthModal({ open, onClose, onSuccess }: CustomerAuthModa
       if (error) throw error;
 
       if (result?.found && result?.customerId) {
-        // Fetch full customer data using the secure customer ID
-        const { data: customer, error: fetchError } = await supabase
-          .from('customers')
-          .select('id, name, email, phone')
-          .eq('id', result.customerId)
-          .maybeSingle();
-
-        if (fetchError) throw fetchError;
-
-        if (customer) {
-          toast.success(`Bem-vindo de volta, ${result.firstName}!`);
-          onSuccess(customer);
-          handleClose();
-        }
+        toast.success(`Bem-vindo de volta, ${result.firstName}!`);
+        
+        // Use data from lookup result
+        const customer: CustomerData = {
+          id: result.customerId,
+          name: result.name || result.firstName,
+          email: result.email || null,
+          phone: result.phone || cleanPhone,
+        };
+        
+        onSuccess(customer);
+        handleClose();
       } else {
         toast.error('Telefone não encontrado. Faça seu primeiro pedido para se cadastrar.');
       }
