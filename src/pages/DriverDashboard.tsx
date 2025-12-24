@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
@@ -10,6 +10,8 @@ import {
   Loader2,
   Power,
   PowerOff,
+  RefreshCw,
+  Bell,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useDriverLocation } from '@/hooks/useDriverLocation';
+import { useRealtimeDriverOrders } from '@/hooks/useRealtimeDriverOrders';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -70,6 +73,21 @@ export default function DriverDashboard() {
     updateInterval: 15000 
   });
 
+  // Realtime subscription for driver orders
+  useRealtimeDriverOrders({
+    driverId: driver?.id || null,
+    onOrderAssigned: (order) => {
+      // Reload orders when new order is assigned
+      loadDriverData();
+    },
+    onOrderUpdate: (updatedOrder) => {
+      setOrders(prev => 
+        prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o)
+          .filter(o => ['ready', 'out_for_delivery', 'awaiting_driver'].includes(o.status))
+      );
+    },
+  });
+
   useEffect(() => {
     if (!user) {
       navigate('/auth');
@@ -78,7 +96,7 @@ export default function DriverDashboard() {
     loadDriverData();
   }, [user, navigate]);
 
-  const loadDriverData = async () => {
+  const loadDriverData = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -108,7 +126,7 @@ export default function DriverDashboard() {
           company:companies(name, address, phone, city)
         `)
         .eq('delivery_driver_id', driverData.id)
-        .in('status', ['ready', 'out_for_delivery'])
+        .in('status', ['ready', 'awaiting_driver', 'out_for_delivery'])
         .order('created_at', { ascending: true }); // Ordenar por mais antigo primeiro (FIFO)
 
       if (ordersError) throw ordersError;
@@ -125,7 +143,7 @@ export default function DriverDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, navigate]);
 
   const toggleAvailability = async () => {
     if (!driver) return;
@@ -249,10 +267,16 @@ export default function DriverDashboard() {
 
         {/* Orders */}
         <div className="space-y-4">
-          <h2 className="font-semibold text-lg flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Entregas Pendentes ({orders.length})
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-lg flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Entregas Pendentes ({orders.length})
+            </h2>
+            <Button variant="outline" size="sm" onClick={loadDriverData}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Atualizar
+            </Button>
+          </div>
 
           {orders.length === 0 ? (
             <Card>

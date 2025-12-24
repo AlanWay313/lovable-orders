@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.lookup-customer]
 verify_jwt = false
+
+[functions.assign-driver]
+verify_jwt = true
