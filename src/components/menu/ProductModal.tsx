@@ -280,28 +280,36 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">{product.name}</DialogTitle>
-        </DialogHeader>
-
+      <DialogContent className="sm:max-w-lg max-h-[95vh] md:max-h-[90vh] overflow-hidden flex flex-col p-0">
+        {/* Product Image - Full Width */}
         {product.image_url && (
-          <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+          <div className="relative aspect-[16/9] sm:aspect-[2/1] w-full flex-shrink-0 bg-muted">
             <img
               src={product.image_url}
               alt={product.name}
               className="w-full h-full object-cover"
             />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+              <h2 className="font-display font-bold text-xl sm:text-2xl leading-tight">{product.name}</h2>
+              <p className="text-2xl sm:text-3xl font-bold mt-1">R$ {product.price.toFixed(2)}</p>
+            </div>
           </div>
         )}
 
-        {product.description && (
-          <p className="text-muted-foreground text-sm">{product.description}</p>
-        )}
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4">
+          {/* Header without image */}
+          {!product.image_url && (
+            <div className="py-4 border-b border-border mb-4">
+              <h2 className="font-display font-bold text-xl">{product.name}</h2>
+              <p className="text-2xl font-bold text-primary mt-1">R$ {product.price.toFixed(2)}</p>
+            </div>
+          )}
 
-        <div className="text-2xl font-bold font-display text-primary">
-          R$ {product.price.toFixed(2)}
-        </div>
+          {product.description && (
+            <p className="text-muted-foreground text-sm mb-4 mt-4">{product.description}</p>
+          )}
 
         {/* Option Groups */}
         {optionGroups.length > 0 && (
@@ -457,7 +465,7 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
         )}
 
         {/* Notes */}
-        <div className="space-y-2">
+        <div className="space-y-2 mt-4">
           <Label htmlFor="notes">Observações</Label>
           <Textarea
             id="notes"
@@ -467,36 +475,39 @@ export function ProductModal({ product, open, onClose }: ProductModalProps) {
             rows={2}
           />
         </div>
+        </div>
 
-        {/* Quantity & Add to Cart */}
-        <div className="flex items-center gap-4 pt-4 border-t border-border">
-          <div className="flex items-center gap-3 bg-secondary rounded-lg p-1">
+        {/* Sticky Footer - Quantity & Add to Cart */}
+        <div className="flex-shrink-0 border-t border-border p-4 sm:px-6 bg-card">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-secondary rounded-xl p-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-lg active:scale-95 transition-transform"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="font-bold w-8 text-center text-lg">{quantity}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-lg active:scale-95 transition-transform"
+                onClick={() => setQuantity(quantity + 1)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              className="flex-1 h-12 gradient-primary text-primary-foreground rounded-xl text-base font-semibold active:scale-[0.98] transition-transform"
+              onClick={handleAddToCart}
+              disabled={!canAddToCart}
             >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <span className="font-medium w-8 text-center">{quantity}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setQuantity(quantity + 1)}
-            >
-              <Plus className="h-4 w-4" />
+              Adicionar • R$ {itemTotal.toFixed(2)}
             </Button>
           </div>
-
-          <Button
-            className="flex-1 gradient-primary text-primary-foreground"
-            onClick={handleAddToCart}
-            disabled={!canAddToCart}
-          >
-            Adicionar R$ {itemTotal.toFixed(2)}
-          </Button>
         </div>
       </DialogContent>
     </Dialog>
