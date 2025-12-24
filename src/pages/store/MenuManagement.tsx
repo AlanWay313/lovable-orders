@@ -82,6 +82,7 @@ export default function MenuManagement() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Category Modal
   const [categoryModal, setCategoryModal] = useState<{
@@ -398,8 +399,7 @@ export default function MenuManagement() {
     );
   }
 
-  // State for category filter
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // Filter products by category and search
 
   // Filter products by category and search
   const displayedProducts = filteredProducts.filter(
