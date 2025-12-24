@@ -15,6 +15,7 @@ import {
   Truck,
   Package,
   MapPin,
+  History,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DriverHistoryModal } from '@/components/drivers/DriverHistoryModal';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -124,6 +126,7 @@ export default function DriversManagement() {
   const [showEditDriver, setShowEditDriver] = useState(false);
   const [showDeleteDriver, setShowDeleteDriver] = useState(false);
   const [showAssignOrder, setShowAssignOrder] = useState(false);
+  const [showDriverHistory, setShowDriverHistory] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
@@ -613,6 +616,15 @@ export default function DriversManagement() {
                               <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedDriver(driver);
+                                  setShowDriverHistory(true);
+                                }}
+                              >
+                                <History className="h-4 w-4 mr-2" />
+                                Histórico
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedDriver(driver);
                                   setShowDeleteDriver(true);
                                 }}
                                 className="text-destructive"
@@ -917,6 +929,14 @@ export default function DriversManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Driver History Modal */}
+      <DriverHistoryModal
+        open={showDriverHistory}
+        onOpenChange={setShowDriverHistory}
+        driver={selectedDriver}
+        companyId={companyId || ''}
+      />
     </DashboardLayout>
   );
 }
