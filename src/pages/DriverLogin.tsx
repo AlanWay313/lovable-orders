@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Loader2, ArrowLeft, Truck, Shield } from 'lucide-react';
+import { Mail, Loader2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,9 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 export default function DriverLogin() {
   const navigate = useNavigate();
   const { user, loading: authLoading, hasRole, signOut } = useAuth();
-  const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Check if user is already logged in
@@ -33,9 +30,7 @@ export default function DriverLogin() {
       }
       
       // If user is store owner or admin (not a driver), sign them out first
-      // to avoid session conflicts
       if (isStoreOwner || isSuperAdmin) {
-        // Show message and sign out
         toast.info('Você está logado como lojista', {
           description: 'Faça logout para acessar como entregador',
         });
@@ -56,7 +51,7 @@ export default function DriverLogin() {
     );
   }
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email.trim()) {
@@ -67,7 +62,7 @@ export default function DriverLogin() {
     setLoading(true);
 
     try {
-      // Use edge function to validate driver email (bypasses RLS)
+      // Use edge function to validate driver email and get driver info
       const { data: validationData, error: validationError } = await supabase.functions.invoke(
         'validate-driver-email',
         { body: { email: email.toLowerCase().trim() } }
@@ -91,76 +86,45 @@ export default function DriverLogin() {
         return;
       }
 
-      // Send OTP and custom email via edge function
-      const { data: otpData, error: otpError } = await supabase.functions.invoke(
-        'send-driver-otp',
-        { body: { email: email.toLowerCase().trim(), origin: window.location.origin } }
-      );
-
-      if (otpError) throw otpError;
-
-      toast.success('Código enviado!', {
-        description: `Verifique sua caixa de entrada em ${email}`,
-      });
-      setStep('otp');
-    } catch (error: any) {
-      console.error('Error sending OTP:', error);
-      toast.error('Erro ao enviar código', {
-        description: error.message || 'Tente novamente',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    if (otp.length !== 6) {
-      toast.error('Digite o código completo');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      // Sign in directly without OTP verification
+      // Use signInWithPassword with a default password or magic link without verification
+      const { data, error } = await supabase.auth.signInWithOtp({
         email: email.toLowerCase().trim(),
-        token: otp,
-        type: 'email',
+        options: {
+          shouldCreateUser: true,
+        },
       });
 
       if (error) throw error;
 
-      if (data.session) {
+      // Since we're skipping OTP verification, we need to use a different approach
+      // Call a backend function that creates a session for the driver
+      const { data: loginData, error: loginError } = await supabase.functions.invoke(
+        'driver-direct-login',
+        { body: { email: email.toLowerCase().trim() } }
+      );
+
+      if (loginError) throw loginError;
+
+      if (loginData?.session) {
+        // Set the session manually
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: loginData.session.access_token,
+          refresh_token: loginData.session.refresh_token,
+        });
+
+        if (sessionError) throw sessionError;
+
         toast.success('Login realizado com sucesso!');
         navigate('/driver');
+      } else {
+        throw new Error('Não foi possível criar a sessão');
       }
     } catch (error: any) {
-      console.error('Error verifying OTP:', error);
-      toast.error('Código inválido', {
-        description: 'Verifique o código e tente novamente',
+      console.error('Error logging in:', error);
+      toast.error('Erro ao fazer login', {
+        description: error.message || 'Tente novamente',
       });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    setLoading(true);
-    try {
-      // Resend OTP via edge function
-      const { error } = await supabase.functions.invoke(
-        'send-driver-otp',
-        { body: { email: email.toLowerCase().trim(), origin: window.location.origin } }
-      );
-
-      if (error) throw error;
-
-      toast.success('Código reenviado!', {
-        description: 'Verifique sua caixa de entrada',
-      });
-      setOtp('');
-    } catch (error: any) {
-      toast.error('Erro ao reenviar código');
     } finally {
       setLoading(false);
     }
@@ -175,112 +139,39 @@ export default function DriverLogin() {
           </div>
           <CardTitle className="text-2xl font-display">Área do Entregador</CardTitle>
           <CardDescription>
-            {step === 'email' 
-              ? 'Acesse com o email cadastrado pelo estabelecimento'
-              : `Digite o código enviado para ${email}`
-            }
+            Acesse com o email cadastrado pelo estabelecimento
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {step === 'email' ? (
-            <form onSubmit={handleSendOTP} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  disabled={loading}
-                  autoFocus
-                />
-              </div>
-              
-              <Button 
-                type="submit" 
-                className="w-full gradient-primary text-primary-foreground"
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-10"
                 disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="mr-2 h-4 w-4" />
-                    Enviar código de acesso
-                  </>
-                )}
-              </Button>
-            </form>
-          ) : (
-            <div className="space-y-6">
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground text-center">
-                  📧 Verifique sua <strong>caixa de entrada</strong> e também a pasta de <strong>spam/lixo eletrônico</strong>
-                </p>
-              </div>
-
-              <div className="flex justify-center">
-                <InputOTP
-                  maxLength={6}
-                  value={otp}
-                  onChange={setOtp}
-                  disabled={loading}
-                >
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-
-              <Button 
-                onClick={handleVerifyOTP}
-                className="w-full gradient-primary text-primary-foreground"
-                disabled={loading || otp.length !== 6}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Verificando...
-                  </>
-                ) : (
-                  'Entrar'
-                )}
-              </Button>
-
-              <div className="flex items-center justify-between text-sm">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStep('email');
-                    setOtp('');
-                  }}
-                  disabled={loading}
-                >
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  Voltar
-                </Button>
-                
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={handleResendOTP}
-                  disabled={loading}
-                >
-                  Reenviar código
-                </Button>
-              </div>
+                autoFocus
+              />
             </div>
-          )}
+            
+            <Button 
+              type="submit" 
+              className="w-full gradient-primary text-primary-foreground"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Entrando...
+                </>
+              ) : (
+                'Entrar'
+              )}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
