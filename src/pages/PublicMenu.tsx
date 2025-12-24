@@ -9,7 +9,11 @@ import {
   ChevronRight,
   Store,
   AlertCircle,
-  Package
+  Package,
+  Star,
+  Plus,
+  ArrowLeft,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,7 +102,6 @@ function PublicMenuContent() {
     setError(null);
 
     try {
-      // Load company
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('*')
@@ -115,7 +118,6 @@ function PublicMenuContent() {
 
       setCompany(companyData);
 
-      // Load categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
         .select('*')
@@ -126,13 +128,9 @@ function PublicMenuContent() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Load products with options
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select(`
-          *,
-          product_options (*)
-        `)
+        .select(`*, product_options (*)`)
         .eq('company_id', companyData.id)
         .eq('is_active', true);
 
@@ -146,7 +144,6 @@ function PublicMenuContent() {
     }
   };
 
-  // Filter products
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.description?.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -154,16 +151,13 @@ function PublicMenuContent() {
     return matchesSearch && matchesCategory;
   });
 
-  // Featured products
   const featuredProducts = products.filter((p) => p.is_featured);
 
-  // Check if store is actually open (manual toggle + operating hours)
   const openingHours = company?.opening_hours as unknown as OperatingHours | null;
   const storeStatus = company ? checkStoreOpen(company.is_open, openingHours) : null;
   const isActuallyOpen = storeStatus?.isOpen ?? false;
   const todayHours = company ? formatTodayHours(openingHours) : null;
 
-  // Get beverages for suggestions (look for category with "bebida" in name)
   const beverageCategory = categories.find(c => 
     c.name.toLowerCase().includes('bebida') || 
     c.name.toLowerCase().includes('drink') ||
@@ -187,14 +181,17 @@ function PublicMenuContent() {
   if (error || !company) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="h-8 w-8 text-destructive" />
+        <div className="text-center max-w-sm">
+          <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="h-10 w-10 text-destructive" />
           </div>
-          <h1 className="text-xl font-bold mb-2">Ops!</h1>
-          <p className="text-muted-foreground mb-6">{error || 'Empresa não encontrada'}</p>
-          <Button asChild>
-            <Link to="/">Voltar ao início</Link>
+          <h1 className="text-2xl font-display font-bold mb-2">Ops!</h1>
+          <p className="text-muted-foreground mb-8">{error || 'Empresa não encontrada'}</p>
+          <Button asChild size="lg">
+            <Link to="/">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar ao início
+            </Link>
           </Button>
         </div>
       </div>
@@ -217,163 +214,197 @@ function PublicMenuContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-28">
       {/* Hero / Cover */}
-      <div className="relative h-48 sm:h-64 bg-gradient-to-br from-primary/20 to-primary/5">
-        {company.cover_url && (
+      <div className="relative h-44 sm:h-56 bg-gradient-to-br from-primary/20 via-primary/10 to-background">
+        {company.cover_url ? (
           <img
             src={company.cover_url}
             alt={company.name}
             className="w-full h-full object-cover"
           />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/20 to-background" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+        
+        {/* Back Button */}
+        <Link 
+          to="/" 
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-md hover:bg-background transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
       </div>
 
-      {/* Company Info */}
-      <div className="container -mt-16 relative z-10">
-        <div className="bg-card rounded-2xl border border-border p-6 shadow-lg">
-          <div className="flex flex-col sm:flex-row gap-4">
+      {/* Company Card */}
+      <div className="container -mt-20 relative z-10 px-4">
+        <div className="bg-card rounded-2xl border border-border p-5 shadow-card">
+          <div className="flex gap-4">
             {/* Logo */}
-            <div className="flex-shrink-0">
-              {company.logo_url ? (
-                <img
-                  src={company.logo_url}
-                  alt={company.name}
-                  className="w-20 h-20 rounded-xl object-cover border border-border"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-xl gradient-primary flex items-center justify-center">
-                  <Store className="h-10 w-10 text-primary-foreground" />
-                </div>
-              )}
-            </div>
+            {company.logo_url ? (
+              <img
+                src={company.logo_url}
+                alt={company.name}
+                className="w-20 h-20 rounded-2xl object-cover border-2 border-background shadow-md flex-shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-md flex-shrink-0">
+                <Store className="h-10 w-10 text-primary-foreground" />
+              </div>
+            )}
 
-            {/* Details */}
-            <div className="flex-1">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold font-display">{company.name}</h1>
-                  {company.description && (
-                    <p className="text-muted-foreground text-sm mt-1">{company.description}</p>
-                  )}
-                </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-xl font-display font-bold truncate">{company.name}</h1>
                 <Badge
-                  variant={isActuallyOpen ? 'default' : 'secondary'}
-                  className={isActuallyOpen ? 'bg-success text-success-foreground' : ''}
+                  variant="secondary"
+                  className={cn(
+                    'flex-shrink-0',
+                    isActuallyOpen ? 'badge-open' : 'badge-closed'
+                  )}
                 >
                   {isActuallyOpen ? 'Aberto' : 'Fechado'}
                 </Badge>
               </div>
 
-              <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
-                {todayHours && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {todayHours}
-                  </div>
-                )}
-                {company.address && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {company.address}, {company.city}
-                  </div>
-                )}
-                {company.phone && (
-                  <div className="flex items-center gap-1">
-                    <Phone className="h-4 w-4" />
-                    {company.phone}
-                  </div>
-                )}
-              </div>
+              {company.description && (
+                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{company.description}</p>
+              )}
 
-              <div className="flex flex-wrap gap-2 mt-3 text-sm">
-                <div className="px-3 py-1 rounded-full bg-accent text-accent-foreground">
-                  Taxa: R$ {Number(company.delivery_fee).toFixed(2)}
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-sm text-muted-foreground">
+                {todayHours && (
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    <span>{todayHours}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                  <span>4.8</span>
                 </div>
-                <div className="px-3 py-1 rounded-full bg-accent text-accent-foreground">
-                  Pedido mín: R$ {Number(company.min_order_value).toFixed(2)}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTrackOrderOpen(true)}
-                  className="h-7 px-3"
-                >
-                  <Package className="mr-1 h-3 w-3" />
-                  Acompanhar pedido
-                </Button>
               </div>
             </div>
           </div>
+
+          {/* Info Pills */}
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-sm">
+              <span className="font-medium">Taxa:</span>
+              <span>R$ {Number(company.delivery_fee).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-sm">
+              <span className="font-medium">Mín:</span>
+              <span>R$ {Number(company.min_order_value).toFixed(2)}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTrackOrderOpen(true)}
+              className="h-8 px-3 text-sm"
+            >
+              <Package className="mr-1.5 h-4 w-4" />
+              Acompanhar pedido
+            </Button>
+          </div>
+
+          {/* Contact */}
+          {(company.address || company.phone) && (
+            <div className="flex flex-wrap gap-4 mt-4 text-sm text-muted-foreground">
+              {company.address && (
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4" />
+                  <span>{company.address}, {company.city}</span>
+                </div>
+              )}
+              {company.phone && (
+                <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                  <Phone className="h-4 w-4" />
+                  <span>{company.phone}</span>
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Closed Store Warning */}
       {!isActuallyOpen && (
-        <div className="container mt-4">
-          <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
-            <p className="text-sm text-destructive font-medium">
+        <div className="container mt-4 px-4">
+          <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/10">
+            <p className="text-sm text-destructive font-medium text-center">
               {storeStatus?.reason === 'manual_closed' && 'Esta loja está fechada no momento.'}
               {storeStatus?.reason === 'day_closed' && 'Esta loja não abre hoje.'}
-              {storeStatus?.reason === 'outside_hours' && 'Esta loja está fora do horário de funcionamento.'}
-              {' '}Você pode ver o cardápio, mas não pode fazer pedidos.
+              {storeStatus?.reason === 'outside_hours' && 'Fora do horário de funcionamento.'}
             </p>
             {storeStatus?.nextOpenTime && (
-              <p className="text-xs text-muted-foreground mt-1">{storeStatus.nextOpenTime}</p>
+              <p className="text-xs text-muted-foreground text-center mt-1">{storeStatus.nextOpenTime}</p>
             )}
           </div>
         </div>
       )}
 
       {/* Search */}
-      <div className="container mt-6">
+      <div className="container mt-6 px-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             placeholder="Buscar no cardápio..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-12 h-12 rounded-xl border-border bg-card text-base"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Categories */}
       {categories.length > 0 && (
-        <div className="container mt-6">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <Button
-              variant={selectedCategory === null ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedCategory(null)}
-              className={selectedCategory === null ? 'gradient-primary text-primary-foreground' : ''}
-            >
-              Todos
-            </Button>
-            {categories.map((category) => (
-              <Button
-                key={category.id}
-                variant={selectedCategory === category.id ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategory(category.id)}
+        <div className="mt-6">
+          <div className="container px-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+              <button
+                onClick={() => setSelectedCategory(null)}
                 className={cn(
-                  'whitespace-nowrap',
-                  selectedCategory === category.id && 'gradient-primary text-primary-foreground'
+                  'category-pill whitespace-nowrap',
+                  selectedCategory === null && 'active'
                 )}
               >
-                {category.name}
-              </Button>
-            ))}
+                Todos
+              </button>
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => setSelectedCategory(category.id)}
+                  className={cn(
+                    'category-pill whitespace-nowrap',
+                    selectedCategory === category.id && 'active'
+                  )}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* Featured Products */}
       {featuredProducts.length > 0 && !searchQuery && !selectedCategory && (
-        <div className="container mt-8">
-          <h2 className="text-lg font-bold font-display mb-4">Destaques</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="container mt-8 px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+            <h2 className="text-lg font-display font-bold">Destaques</h2>
+          </div>
+          <div className="grid gap-4">
             {featuredProducts.map((product) => (
               <ProductCard
                 key={product.id}
@@ -394,9 +425,9 @@ function PublicMenuContent() {
         if (categoryProducts.length === 0) return null;
 
         return (
-          <div key={category.id} className="container mt-8">
-            <h2 className="text-lg font-bold font-display mb-4">{category.name}</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div key={category.id} className="container mt-8 px-4">
+            <h2 className="text-lg font-display font-bold mb-4">{category.name}</h2>
+            <div className="grid gap-3">
               {categoryProducts.map((product) => (
                 <ProductCard
                   key={product.id}
@@ -411,9 +442,9 @@ function PublicMenuContent() {
 
       {/* Uncategorized Products */}
       {filteredProducts.filter((p) => !p.category_id).length > 0 && (
-        <div className="container mt-8">
-          <h2 className="text-lg font-bold font-display mb-4">Outros</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="container mt-8 px-4">
+          <h2 className="text-lg font-display font-bold mb-4">Outros</h2>
+          <div className="grid gap-3">
             {filteredProducts
               .filter((p) => !p.category_id)
               .map((product) => (
@@ -429,8 +460,16 @@ function PublicMenuContent() {
 
       {/* Empty State */}
       {filteredProducts.length === 0 && (
-        <div className="container mt-12 text-center">
+        <div className="container mt-16 text-center px-4">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <Search className="h-8 w-8 text-muted-foreground" />
+          </div>
           <p className="text-muted-foreground">Nenhum produto encontrado</p>
+          {searchQuery && (
+            <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2">
+              Limpar busca
+            </Button>
+          )}
         </div>
       )}
 
@@ -438,13 +477,21 @@ function PublicMenuContent() {
       {itemCount > 0 && (
         <div className="fixed bottom-4 left-4 right-4 z-50 animate-slide-up">
           <Button
-            className="w-full gradient-primary text-primary-foreground shadow-lg h-14 text-base"
+            className="w-full gradient-primary text-primary-foreground shadow-xl h-14 text-base rounded-2xl floating-button"
             onClick={() => setCartOpen(true)}
           >
-            <ShoppingBag className="mr-2 h-5 w-5" />
-            Ver carrinho ({itemCount})
-            <ChevronRight className="ml-auto h-5 w-5" />
-            <span className="ml-2 font-bold">R$ {subtotal.toFixed(2)}</span>
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <ShoppingBag className="h-4 w-4" />
+                </div>
+                <span className="font-semibold">Ver carrinho</span>
+                <Badge variant="secondary" className="bg-white/20 text-white border-0">
+                  {itemCount}
+                </Badge>
+              </div>
+              <span className="font-bold text-lg">R$ {subtotal.toFixed(2)}</span>
+            </div>
           </Button>
         </div>
       )}
@@ -498,34 +545,57 @@ function ProductCard({
     <button
       onClick={onClick}
       className={cn(
-        'flex gap-4 p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:shadow-md transition-all text-left w-full group',
-        featured && 'ring-2 ring-primary/20'
+        'product-card flex gap-4 p-4 text-left w-full group',
+        featured && 'ring-1 ring-primary/20 bg-primary/[0.02]'
       )}
     >
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium group-hover:text-primary transition-colors line-clamp-1">
-          {product.name}
-        </h3>
+      {/* Content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-start gap-2">
+          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 flex-1">
+            {product.name}
+          </h3>
+          {featured && (
+            <Badge variant="secondary" className="bg-primary/10 text-primary border-0 flex-shrink-0">
+              <Star className="h-3 w-3 mr-1 fill-current" />
+              Destaque
+            </Badge>
+          )}
+        </div>
+        
         {product.description && (
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="text-sm text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">
             {product.description}
           </p>
         )}
-        {product.product_options && product.product_options.length > 0 && (
-          <p className="text-xs text-primary mt-1">
-            +{product.product_options.length} adicionais disponíveis
-          </p>
-        )}
-        <p className="text-lg font-bold text-primary mt-2">
-          R$ {Number(product.price).toFixed(2)}
-        </p>
+
+        <div className="mt-auto pt-3 flex items-end justify-between">
+          <div>
+            <p className="text-lg font-bold text-primary">
+              R$ {Number(product.price).toFixed(2)}
+            </p>
+            {product.product_options && product.product_options.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                +{product.product_options.length} adicionais
+              </p>
+            )}
+          </div>
+          
+          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            <Plus className="h-5 w-5" />
+          </div>
+        </div>
       </div>
+
+      {/* Image */}
       {product.image_url && (
-        <img
-          src={product.image_url}
-          alt={product.name}
-          className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-        />
+        <div className="relative flex-shrink-0">
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover"
+          />
+        </div>
       )}
     </button>
   );
@@ -534,26 +604,34 @@ function ProductCard({
 function MenuSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      <Skeleton className="h-48 w-full" />
-      <div className="container -mt-16 relative z-10">
-        <div className="bg-card rounded-2xl border border-border p-6">
+      <Skeleton className="h-44 sm:h-56 w-full" />
+      <div className="container -mt-20 relative z-10 px-4">
+        <div className="bg-card rounded-2xl border border-border p-5">
           <div className="flex gap-4">
-            <Skeleton className="w-20 h-20 rounded-xl" />
+            <Skeleton className="w-20 h-20 rounded-2xl flex-shrink-0" />
             <div className="flex-1">
-              <Skeleton className="h-7 w-48 mb-2" />
-              <Skeleton className="h-4 w-full max-w-md" />
+              <Skeleton className="h-6 w-40 mb-2" />
+              <Skeleton className="h-4 w-full max-w-xs mb-3" />
+              <Skeleton className="h-4 w-24" />
             </div>
           </div>
         </div>
       </div>
-      <div className="container mt-6">
-        <Skeleton className="h-10 w-full" />
+      <div className="container mt-6 px-4">
+        <Skeleton className="h-12 w-full rounded-xl" />
       </div>
-      <div className="container mt-8">
+      <div className="container mt-6 px-4">
+        <div className="flex gap-2 overflow-hidden">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-10 w-24 rounded-full flex-shrink-0" />
+          ))}
+        </div>
+      </div>
+      <div className="container mt-8 px-4">
         <Skeleton className="h-6 w-32 mb-4" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
+            <Skeleton key={i} className="h-32 rounded-2xl" />
           ))}
         </div>
       </div>
