@@ -15,7 +15,8 @@ import {
   ArrowLeft,
   X,
   ChevronRight,
-  Flame
+  Flame,
+  Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { checkStoreOpen, formatTodayHours } from '@/lib/storeHours';
 import { OperatingHours } from '@/components/store/OperatingHoursEditor';
 import { Json } from '@/integrations/supabase/types';
+import { toast } from 'sonner';
 
 interface Company {
   id: string;
@@ -92,6 +94,8 @@ function PublicMenuContent() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutMode, setCheckoutMode] = useState(false);
   const [trackOrderOpen, setTrackOrderOpen] = useState(false);
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
+  const [cartBounce, setCartBounce] = useState(false);
 
   useEffect(() => {
     if (slug) {
@@ -168,6 +172,22 @@ function PublicMenuContent() {
         options: [],
         imageUrl: product.image_url || undefined,
       });
+      
+      // Trigger animations
+      setRecentlyAddedId(product.id);
+      setCartBounce(true);
+      
+      // Show toast feedback
+      toast.success(`${product.name} adicionado!`, {
+        duration: 2000,
+        position: 'top-center',
+      });
+      
+      // Reset animations
+      setTimeout(() => {
+        setRecentlyAddedId(null);
+        setCartBounce(false);
+      }, 600);
     }
   };
 
@@ -434,6 +454,7 @@ function PublicMenuContent() {
                 onClick={() => setSelectedProduct(product)}
                 onQuickAdd={(e) => handleQuickAdd(product, e)}
                 quantityInCart={getProductQuantityInCart(product.id)}
+                isRecentlyAdded={recentlyAddedId === product.id}
               />
             ))}
           </div>
@@ -458,6 +479,7 @@ function PublicMenuContent() {
                   onClick={() => setSelectedProduct(product)}
                   onQuickAdd={(e) => handleQuickAdd(product, e)}
                   quantityInCart={getProductQuantityInCart(product.id)}
+                  isRecentlyAdded={recentlyAddedId === product.id}
                 />
               ))}
             </div>
@@ -479,6 +501,7 @@ function PublicMenuContent() {
                   onClick={() => setSelectedProduct(product)}
                   onQuickAdd={(e) => handleQuickAdd(product, e)}
                   quantityInCart={getProductQuantityInCart(product.id)}
+                  isRecentlyAdded={recentlyAddedId === product.id}
                 />
               ))}
           </div>
@@ -504,14 +527,20 @@ function PublicMenuContent() {
       {itemCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-background via-background to-transparent pt-8">
           <Button
-            className="w-full gradient-primary text-primary-foreground shadow-xl h-14 text-base rounded-2xl active:scale-[0.98] transition-transform"
+            className={cn(
+              "w-full gradient-primary text-primary-foreground shadow-xl h-14 text-base rounded-2xl transition-all",
+              cartBounce ? "scale-105 shadow-2xl" : "active:scale-[0.98]"
+            )}
             onClick={() => setCartOpen(true)}
           >
             <div className="flex items-center justify-between w-full px-1">
               <div className="flex items-center gap-2">
-                <div className="relative">
+                <div className={cn("relative transition-transform", cartBounce && "animate-bounce")}>
                   <ShoppingBag className="h-5 w-5" />
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-primary text-xs font-bold flex items-center justify-center">
+                  <span className={cn(
+                    "absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-primary text-xs font-bold flex items-center justify-center transition-transform",
+                    cartBounce && "scale-125"
+                  )}>
                     {itemCount}
                   </span>
                 </div>
@@ -565,16 +594,23 @@ function FeaturedProductCard({
   onClick,
   onQuickAdd,
   quantityInCart,
+  isRecentlyAdded,
 }: {
   product: Product;
   onClick: () => void;
   onQuickAdd: (e: React.MouseEvent) => void;
   quantityInCart: number;
+  isRecentlyAdded?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className="relative flex-shrink-0 w-40 bg-card rounded-2xl border border-border overflow-hidden text-left group hover:border-primary/30 transition-all active:scale-[0.98]"
+      className={cn(
+        "relative flex-shrink-0 w-40 bg-card rounded-2xl border overflow-hidden text-left group transition-all active:scale-[0.98]",
+        isRecentlyAdded 
+          ? "border-primary ring-2 ring-primary/20 scale-[1.02]" 
+          : "border-border hover:border-primary/30"
+      )}
     >
       {/* Image */}
       <div className="relative aspect-square bg-secondary">
@@ -590,10 +626,22 @@ function FeaturedProductCard({
           </div>
         )}
         
-        {/* Quantity Badge */}
+        {/* Quantity Badge with animation */}
         {quantityInCart > 0 && (
-          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg">
+          <div className={cn(
+            "absolute top-2 right-2 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg transition-transform",
+            isRecentlyAdded && "animate-bounce"
+          )}>
             {quantityInCart}
+          </div>
+        )}
+        
+        {/* Success overlay */}
+        {isRecentlyAdded && (
+          <div className="absolute inset-0 bg-primary/20 flex items-center justify-center animate-fade-in">
+            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center animate-scale-in">
+              <Check className="h-6 w-6 text-primary-foreground" />
+            </div>
           </div>
         )}
       </div>
@@ -611,9 +659,14 @@ function FeaturedProductCard({
       {/* Quick Add Button */}
       <button
         onClick={onQuickAdd}
-        className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:bg-primary/90 active:scale-90 transition-all"
+        className={cn(
+          "absolute bottom-3 right-3 w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all",
+          isRecentlyAdded
+            ? "bg-green-500 text-white scale-110"
+            : "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-90"
+        )}
       >
-        <Plus className="h-4 w-4" />
+        {isRecentlyAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
       </button>
     </button>
   );
@@ -625,11 +678,13 @@ function ProductCard({
   onClick,
   onQuickAdd,
   quantityInCart,
+  isRecentlyAdded,
 }: {
   product: Product;
   onClick: () => void;
   onQuickAdd: (e: React.MouseEvent) => void;
   quantityInCart: number;
+  isRecentlyAdded?: boolean;
 }) {
   const hasOptions = product.product_options && product.product_options.length > 0;
 
@@ -638,7 +693,11 @@ function ProductCard({
       onClick={onClick}
       className={cn(
         'w-full flex gap-3 p-3 rounded-2xl border bg-card text-left group transition-all active:scale-[0.99]',
-        quantityInCart > 0 ? 'border-primary/30 bg-primary/[0.02]' : 'border-border hover:border-primary/20'
+        isRecentlyAdded 
+          ? 'border-primary ring-2 ring-primary/20 scale-[1.01]' 
+          : quantityInCart > 0 
+            ? 'border-primary/30 bg-primary/[0.02]' 
+            : 'border-border hover:border-primary/20'
       )}
     >
       {/* Content */}
@@ -681,17 +740,34 @@ function ProductCard({
           </div>
         )}
         
+        {/* Success overlay */}
+        {isRecentlyAdded && (
+          <div className="absolute inset-0 rounded-xl bg-primary/20 flex items-center justify-center animate-fade-in">
+            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center animate-scale-in">
+              <Check className="h-5 w-5 text-primary-foreground" />
+            </div>
+          </div>
+        )}
+        
         {/* Quantity Badge or Add Button */}
         {quantityInCart > 0 ? (
-          <div className="absolute -bottom-1 -right-1 h-7 min-w-7 px-2 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg">
+          <div className={cn(
+            "absolute -bottom-1 -right-1 h-7 min-w-7 px-2 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg transition-transform",
+            isRecentlyAdded && "animate-bounce"
+          )}>
             {quantityInCart}x
           </div>
         ) : (
           <button
             onClick={onQuickAdd}
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:bg-primary/90 active:scale-90 transition-all"
+            className={cn(
+              "absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all",
+              isRecentlyAdded
+                ? "bg-green-500 text-white scale-110"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-90"
+            )}
           >
-            <Plus className="h-4 w-4" />
+            {isRecentlyAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           </button>
         )}
       </div>
