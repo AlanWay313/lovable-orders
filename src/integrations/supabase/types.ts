@@ -224,6 +224,7 @@ export type Database = {
           city: string
           complement: string | null
           created_at: string
+          customer_id: string | null
           id: string
           is_default: boolean | null
           label: string | null
@@ -240,6 +241,7 @@ export type Database = {
           city: string
           complement?: string | null
           created_at?: string
+          customer_id?: string | null
           id?: string
           is_default?: boolean | null
           label?: string | null
@@ -256,6 +258,7 @@ export type Database = {
           city?: string
           complement?: string | null
           created_at?: string
+          customer_id?: string | null
           id?: string
           is_default?: boolean | null
           label?: string | null
@@ -268,7 +271,15 @@ export type Database = {
           user_id?: string | null
           zip_code?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customer_addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customers: {
         Row: {

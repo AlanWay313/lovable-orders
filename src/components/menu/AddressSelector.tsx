@@ -19,6 +19,7 @@ interface Address {
   reference: string | null;
   label: string | null;
   is_default: boolean | null;
+  customer_id?: string | null;
 }
 
 interface AddressSelectorProps {
@@ -46,38 +47,12 @@ export function AddressSelector({ customerId, selectedAddressId, onSelect, onAdd
     
     setLoading(true);
     try {
-      // First get customer email to find their orders' addresses
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('email, phone')
-        .eq('id', customerId)
-        .single();
-      
-      if (!customer) {
-        setAddresses([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get addresses from orders made by this customer (by email)
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('delivery_address_id')
-        .eq('customer_email', customer.email)
-        .not('delivery_address_id', 'is', null);
-
-      if (!orders || orders.length === 0) {
-        setAddresses([]);
-        setLoading(false);
-        return;
-      }
-
-      const addressIds = [...new Set(orders.map(o => o.delivery_address_id).filter(Boolean))];
-      
+      // Get addresses directly by customer_id
       const { data, error } = await supabase
         .from('customer_addresses')
         .select('*')
-        .in('id', addressIds)
+        .eq('customer_id', customerId)
+        .order('is_default', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
