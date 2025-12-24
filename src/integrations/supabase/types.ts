@@ -862,6 +862,7 @@ export type Database = {
         | "confirmed"
         | "preparing"
         | "ready"
+        | "awaiting_driver"
         | "out_for_delivery"
         | "delivered"
         | "cancelled"
@@ -1001,6 +1002,7 @@ export const Constants = {
         "confirmed",
         "preparing",
         "ready",
+        "awaiting_driver",
         "out_for_delivery",
         "delivered",
         "cancelled",
