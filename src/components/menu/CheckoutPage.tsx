@@ -64,6 +64,7 @@ interface SavedAddress {
   reference: string | null;
   label: string | null;
   is_default: boolean | null;
+  customer_id?: string | null;
 }
 
 const checkoutSchema = z.object({
@@ -336,35 +337,8 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
     setLoading(true);
     try {
       const isLoggedIn = !!loggedCustomer;
-
-      let addressId = selectedAddress?.id;
-
-      // If using a new address or guest checkout, create address
-      if (showAddressForm || !isLoggedIn || !selectedAddress) {
-        const { data: addressData, error: addressError } = await supabase
-          .from('customer_addresses')
-          .insert({
-            user_id: null, // We don't use auth users for customer addresses
-            session_id: `guest-${crypto.randomUUID()}`,
-            street: data.street,
-            number: data.number,
-            complement: data.complement || null,
-            neighborhood: data.neighborhood,
-            city: data.city,
-            state: data.state,
-            zip_code: data.zipCode,
-            reference: data.reference || null,
-            label: data.addressLabel || 'Casa',
-            is_default: !selectedAddress,
-          })
-          .select()
-          .single();
-
-        if (addressError) throw addressError;
-        addressId = addressData.id;
-      }
-
-      // Create or update customer record
+      
+      // First, get or create customer record
       let customerId: string | null = loggedCustomer?.id || null;
       
       if (!customerId && (data.customerEmail || data.customerPhone)) {
@@ -395,6 +369,40 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
             customerId = newCustomer.id;
           }
         }
+      }
+
+      let addressId = selectedAddress?.id;
+
+      // If using a new address or guest checkout, create address
+      if (showAddressForm || !selectedAddress) {
+        const { data: addressData, error: addressError } = await supabase
+          .from('customer_addresses')
+          .insert({
+            customer_id: customerId, // Link directly to customer
+            user_id: null,
+            session_id: customerId ? null : `guest-${crypto.randomUUID()}`,
+            street: data.street,
+            number: data.number,
+            complement: data.complement || null,
+            neighborhood: data.neighborhood,
+            city: data.city,
+            state: data.state,
+            zip_code: data.zipCode,
+            reference: data.reference || null,
+            label: data.addressLabel || 'Casa',
+            is_default: !selectedAddress,
+          })
+          .select()
+          .single();
+
+        if (addressError) throw addressError;
+        addressId = addressData.id;
+      } else if (selectedAddress && customerId && !selectedAddress.customer_id) {
+        // Update existing address to link to customer if not already linked
+        await supabase
+          .from('customer_addresses')
+          .update({ customer_id: customerId })
+          .eq('id', selectedAddress.id);
       }
 
       // Create order
