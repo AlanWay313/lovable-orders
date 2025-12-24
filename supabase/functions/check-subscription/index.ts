@@ -39,9 +39,20 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    
+
+    // If the token is invalid/revoked ("session not found" etc), do NOT crash the app.
+    // Return free plan as a safe fallback.
     if (userError || !userData.user?.email) {
-      throw new Error("User not authenticated");
+      logStep("User not authenticated - returning free plan", { userError: userError?.message });
+      return new Response(JSON.stringify({
+        subscribed: false,
+        plan: "free",
+        orderLimit: 1000,
+        displayName: "Plano Gratuito",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
     const user = userData.user;
