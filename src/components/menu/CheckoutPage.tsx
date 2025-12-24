@@ -427,10 +427,13 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
           .eq('id', selectedAddress.id);
       }
 
-      // Create order
-      const { data: orderData, error: orderError } = await supabase
+      // Create order with pre-generated ID to avoid RLS issues with .select()
+      const newOrderId = crypto.randomUUID();
+      
+      const { error: orderError } = await supabase
         .from('orders')
         .insert({
+          id: newOrderId,
           company_id: companyId,
           customer_id: null, // We don't link to auth users
           customer_name: data.customerName,
@@ -446,15 +449,13 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
           change_for: data.paymentMethod === 'cash' && data.needsChange ? data.changeFor : null,
           coupon_id: appliedCoupon?.id || null,
           discount_amount: discountAmount,
-        })
-        .select()
-        .single();
+        });
 
       if (orderError) throw orderError;
 
       // Create order items
       const orderItems = items.map((item) => ({
-        order_id: orderData.id,
+        order_id: newOrderId,
         product_id: item.productId,
         product_name: item.productName,
         quantity: item.quantity,
@@ -482,7 +483,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
       if (data.paymentMethod === 'online') {
         const response = await supabase.functions.invoke('create-checkout', {
           body: {
-            orderId: orderData.id,
+            orderId: newOrderId,
             items: items.map(item => ({
               productName: item.productName,
               price: item.price,
@@ -512,13 +513,13 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
         deliveryFee,
         total,
       });
-      setOrderId(orderData.id);
+      setOrderId(newOrderId);
       setOrderComplete(true);
       clearCart();
 
       toast({
         title: 'Pedido realizado!',
-        description: `Pedido #${orderData.id.slice(0, 8)} enviado com sucesso`,
+        description: `Pedido #${newOrderId.slice(0, 8)} enviado com sucesso`,
       });
     } catch (error: any) {
       console.error('Checkout error:', error);
