@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.send-driver-otp]
 verify_jwt = false
+
+[functions.driver-direct-login]
+verify_jwt = false
