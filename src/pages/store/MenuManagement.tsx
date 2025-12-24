@@ -13,6 +13,7 @@ import {
   EyeOff,
   Star,
   Settings2,
+  Clock,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -397,6 +398,19 @@ export default function MenuManagement() {
     );
   }
 
+  // State for category filter
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Filter products by category and search
+  const displayedProducts = filteredProducts.filter(
+    (p) => selectedCategory === 'all' || p.category_id === selectedCategory
+  );
+
+  // Stats
+  const activeProducts = products.filter((p) => p.is_active).length;
+  const featuredProducts = products.filter((p) => p.is_featured).length;
+  const activeCategories = categories.filter((c) => c.is_active).length;
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -405,9 +419,65 @@ export default function MenuManagement() {
           <div>
             <h1 className="text-2xl font-bold font-display">Cardápio</h1>
             <p className="text-muted-foreground">
-              Gerencie categorias e produtos
+              Gerencie categorias e produtos do seu estabelecimento
             </p>
           </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Package className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{products.length}</p>
+                  <p className="text-sm text-muted-foreground">Total de Produtos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-success/10">
+                  <Eye className="h-5 w-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{activeProducts}</p>
+                  <p className="text-sm text-muted-foreground">Produtos Ativos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-warning/10">
+                  <Star className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{featuredProducts}</p>
+                  <p className="text-sm text-muted-foreground">Em Destaque</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-secondary/50">
+                  <FolderOpen className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{activeCategories}</p>
+                  <p className="text-sm text-muted-foreground">Categorias Ativas</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Tabs defaultValue="products" className="space-y-6">
@@ -424,126 +494,202 @@ export default function MenuManagement() {
 
           {/* Products Tab */}
           <TabsContent value="products" className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar produtos..."
+                  placeholder="Buscar produtos por nome ou descrição..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-full lg:w-[200px]">
+                  <SelectValue placeholder="Filtrar por categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as categorias</SelectItem>
+                  <SelectItem value="none">Sem categoria</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button onClick={() => openProductModal()} className="gradient-primary text-primary-foreground">
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Produto
               </Button>
             </div>
 
-            {filteredProducts.length === 0 ? (
+            {displayedProducts.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Nenhum produto cadastrado</p>
+                  <p className="text-muted-foreground">
+                    {searchQuery || selectedCategory !== 'all' 
+                      ? 'Nenhum produto encontrado com os filtros aplicados' 
+                      : 'Nenhum produto cadastrado'}
+                  </p>
+                  {!searchQuery && selectedCategory === 'all' && (
+                    <Button onClick={() => openProductModal()} variant="outline" className="mt-4">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Criar primeiro produto
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredProducts.map((product) => (
-                  <Card key={product.id} className={!product.is_active ? 'opacity-60' : ''}>
-                    <CardContent className="p-4">
-                      <div className="flex gap-4">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-20 h-20 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                            <Package className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h3 className="font-medium truncate">{product.name}</h3>
-                              <p className="text-lg font-bold text-primary">
-                                R$ {Number(product.price).toFixed(2)}
-                              </p>
+              <div className="space-y-3">
+                {displayedProducts.map((product) => {
+                  const category = categories.find((c) => c.id === product.category_id);
+                  return (
+                    <Card key={product.id} className={`transition-all hover:shadow-md ${!product.is_active ? 'opacity-60' : ''}`}>
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          {/* Product Image */}
+                          {product.image_url ? (
+                            <img
+                              src={product.image_url}
+                              alt={product.name}
+                              className="w-24 h-24 lg:w-32 lg:h-32 rounded-xl object-cover flex-shrink-0 border"
+                            />
+                          ) : (
+                            <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 border-2 border-dashed">
+                              <Package className="h-10 w-10 text-muted-foreground" />
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openProductModal(product)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleProductActive(product)}>
-                                  {product.is_active ? (
-                                    <>
-                                      <EyeOff className="h-4 w-4 mr-2" />
-                                      Desativar
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Ativar
-                                    </>
-                                  )}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => toggleProductFeatured(product)}>
-                                  <Star className={`h-4 w-4 mr-2 ${product.is_featured ? 'fill-current' : ''}`} />
-                                  {product.is_featured ? 'Remover destaque' : 'Destacar'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => setOptionsEditor({
-                                    open: true,
-                                    productId: product.id,
-                                    productName: product.name,
-                                  })}
-                                >
-                                  <Settings2 className="h-4 w-4 mr-2" />
-                                  Opções / Adicionais
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    setDeleteModal({
-                                      open: true,
-                                      type: 'product',
-                                      id: product.id,
-                                      name: product.name,
-                                    })
-                                  }
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                          <div className="flex gap-2 mt-2">
-                            {!product.is_active && (
-                              <Badge variant="secondary">Inativo</Badge>
-                            )}
-                            {product.is_featured && (
-                              <Badge className="bg-warning/10 text-warning border-warning/30">
-                                <Star className="h-3 w-3 mr-1 fill-current" />
-                                Destaque
-                              </Badge>
-                            )}
+                          )}
+
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <h3 className="font-semibold text-lg">{product.name}</h3>
+                                {product.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-2">
+                                    {product.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xl font-bold text-primary whitespace-nowrap">
+                                  R$ {Number(product.price).toFixed(2)}
+                                </p>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openProductModal(product)}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Editar Produto
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => setOptionsEditor({
+                                        open: true,
+                                        productId: product.id,
+                                        productName: product.name,
+                                      })}
+                                    >
+                                      <Settings2 className="h-4 w-4 mr-2" />
+                                      Opções e Adicionais
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => toggleProductActive(product)}>
+                                      {product.is_active ? (
+                                        <>
+                                          <EyeOff className="h-4 w-4 mr-2" />
+                                          Desativar
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Eye className="h-4 w-4 mr-2" />
+                                          Ativar
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => toggleProductFeatured(product)}>
+                                      <Star className={`h-4 w-4 mr-2 ${product.is_featured ? 'fill-current' : ''}`} />
+                                      {product.is_featured ? 'Remover Destaque' : 'Destacar'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        setDeleteModal({
+                                          open: true,
+                                          type: 'product',
+                                          id: product.id,
+                                          name: product.name,
+                                        })
+                                      }
+                                      className="text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Excluir
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+
+                            {/* Product Details */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {category && (
+                                <Badge variant="outline" className="gap-1">
+                                  <FolderOpen className="h-3 w-3" />
+                                  {category.name}
+                                </Badge>
+                              )}
+                              {product.preparation_time_minutes && (
+                                <Badge variant="secondary" className="gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {product.preparation_time_minutes} min
+                                </Badge>
+                              )}
+                              {!product.is_active && (
+                                <Badge variant="destructive">Inativo</Badge>
+                              )}
+                              {product.is_featured && (
+                                <Badge className="bg-warning/10 text-warning border-warning/30 gap-1">
+                                  <Star className="h-3 w-3 fill-current" />
+                                  Destaque
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Quick Actions */}
+                            <div className="flex gap-2 pt-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openProductModal(product)}
+                              >
+                                <Edit className="h-3 w-3 mr-1" />
+                                Editar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setOptionsEditor({
+                                  open: true,
+                                  productId: product.id,
+                                  productName: product.name,
+                                })}
+                              >
+                                <Settings2 className="h-3 w-3 mr-1" />
+                                Opções
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
