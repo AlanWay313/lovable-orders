@@ -34,18 +34,21 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Check if driver exists and is active
-    const { data: driver, error: driverError } = await supabaseAdmin
+    // Check if driver exists and is active (get first active one if multiple)
+    const { data: drivers, error: driverError } = await supabaseAdmin
       .from("delivery_drivers")
       .select("id, email, driver_name, is_active, user_id, company_id")
       .eq("email", normalizedEmail)
       .eq("is_active", true)
-      .maybeSingle();
+      .order("created_at", { ascending: false })
+      .limit(1);
 
     if (driverError) {
       logStep("Error fetching driver", { error: driverError.message });
       throw new Error("Erro ao verificar entregador");
     }
+
+    const driver = drivers && drivers.length > 0 ? drivers[0] : null;
 
     if (!driver) {
       logStep("Driver not found or inactive");

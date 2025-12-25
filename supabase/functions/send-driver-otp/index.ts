@@ -35,13 +35,18 @@ serve(async (req) => {
     );
 
     // Validate driver exists + active (server-side, bypassing RLS)
-    const { data: driver, error: driverError } = await supabaseAdmin
+    // Handle multiple drivers with same email (different companies)
+    const { data: drivers, error: driverError } = await supabaseAdmin
       .from("delivery_drivers")
       .select("driver_name, is_active, company_id")
       .eq("email", normalizedEmail)
-      .maybeSingle();
+      .order("is_active", { ascending: false })
+      .limit(10);
 
     if (driverError) throw driverError;
+
+    // Get first active driver or null if none
+    const driver = drivers?.find(d => d.is_active) || (drivers?.length ? drivers[0] : null);
 
     if (!driver) {
       return new Response(JSON.stringify({ error: "Email não cadastrado como entregador" }), {

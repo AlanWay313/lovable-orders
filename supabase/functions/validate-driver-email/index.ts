@@ -27,13 +27,19 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { data: driver, error } = await supabaseAdmin
+    // Use .select() without .single() to allow multiple rows
+    // Then pick the first active one (or first one if none active)
+    const { data: drivers, error } = await supabaseAdmin
       .from("delivery_drivers")
       .select("id, driver_name, is_active, company_id")
       .eq("email", email.toLowerCase().trim())
-      .maybeSingle();
+      .order("is_active", { ascending: false })
+      .limit(10);
 
     if (error) throw error;
+
+    // Get the first active driver, or the first driver if none are active
+    const driver = drivers && drivers.length > 0 ? drivers[0] : null;
 
     return new Response(
       JSON.stringify({
