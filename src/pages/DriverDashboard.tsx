@@ -15,6 +15,8 @@ import {
   MapPinOff,
   Play,
   ThumbsUp,
+  Bell,
+  XCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +39,32 @@ interface OrderItem {
   total_price: number;
   options: { name: string; priceModifier?: number }[] | null;
   notes: string | null;
+}
+
+interface OrderOffer {
+  id: string;
+  order_id: string;
+  status: string;
+  created_at: string;
+  order: {
+    id: string;
+    customer_name: string;
+    customer_phone: string;
+    total: number;
+    delivery_fee: number;
+    payment_method: string;
+    created_at: string;
+    notes: string | null;
+    delivery_address: {
+      street: string;
+      number: string;
+      neighborhood: string;
+      city: string;
+    } | null;
+    company: {
+      name: string;
+    };
+  };
 }
 
 interface Order {
@@ -79,8 +107,10 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [driver, setDriver] = useState<any>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [pendingOffers, setPendingOffers] = useState<OrderOffer[]>([]);
   const [locationStatus, setLocationStatus] = useState<'pending' | 'granted' | 'denied' | 'unavailable'>('pending');
   const [updatingOrder, setUpdatingOrder] = useState<string | null>(null);
+  const [acceptingOffer, setAcceptingOffer] = useState<string | null>(null);
   
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -164,6 +194,7 @@ export default function DriverDashboard() {
     driverId: driver?.id || null,
     onOrderAssigned: () => {
       loadDriverData();
+      loadPendingOffers();
     },
     onOrderUpdate: (updatedOrder) => {
       setOrders(prev => 
@@ -172,6 +203,50 @@ export default function DriverDashboard() {
       );
     },
   });
+
+  // Realtime subscription for order offers
+  useEffect(() => {
+    if (!driver?.id) return;
+
+    const channel = supabase
+      .channel('order-offers-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_offers',
+          filter: `driver_id=eq.${driver.id}`,
+        },
+        (payload) => {
+          console.log('Order offer change:', payload);
+          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
+            // New offer received - reload offers
+            loadPendingOffers();
+            toast.info('Nova entrega disponível! Aceite rápido!', { duration: 5000 });
+            // Play sound
+            try {
+              const audio = new Audio('/notification.mp3');
+              audio.volume = 0.7;
+              audio.play().catch(() => {});
+            } catch (e) {}
+          } else if (payload.eventType === 'UPDATE') {
+            if (payload.new.status === 'cancelled' || payload.new.status === 'expired') {
+              // Offer was cancelled (someone else took it)
+              setPendingOffers(prev => prev.filter(o => o.id !== payload.new.id));
+              if (payload.new.status === 'cancelled') {
+                toast.warning('Pedido já foi aceito por outro entregador');
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id]);
 
   useEffect(() => {
     if (!user) {
@@ -185,6 +260,13 @@ export default function DriverDashboard() {
     };
   }, [user, navigate, stopLocationTracking]);
 
+  // Load pending offers when driver is loaded
+  useEffect(() => {
+    if (driver?.id) {
+      loadPendingOffers();
+    }
+  }, [driver?.id]);
+
   // Request location permission on mount
   useEffect(() => {
     if (driver?.id && locationStatus === 'pending') {
@@ -192,6 +274,48 @@ export default function DriverDashboard() {
       startLocationTracking();
     }
   }, [driver?.id, locationStatus, startLocationTracking]);
+
+  const loadPendingOffers = useCallback(async () => {
+    if (!driver?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('order_offers')
+        .select(`
+          id,
+          order_id,
+          status,
+          created_at,
+          order:orders(
+            id,
+            customer_name,
+            customer_phone,
+            total,
+            delivery_fee,
+            payment_method,
+            created_at,
+            notes,
+            delivery_address:customer_addresses(street, number, neighborhood, city),
+            company:companies(name)
+          )
+        `)
+        .eq('driver_id', driver.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading pending offers:', error);
+        return;
+      }
+
+      setPendingOffers(data?.map(offer => ({
+        ...offer,
+        order: offer.order as OrderOffer['order']
+      })) || []);
+    } catch (error) {
+      console.error('Error loading pending offers:', error);
+    }
+  }, [driver?.id]);
 
   const loadDriverData = useCallback(async () => {
     if (!user) return;
@@ -278,6 +402,34 @@ export default function DriverDashboard() {
 
     setDriver({ ...driver, is_available: newStatus });
     toast.success(newStatus ? 'Você está disponível para entregas' : 'Você está indisponível');
+  };
+
+  // Accept an offer from the competitive offers system
+  const acceptOffer = async (offer: OrderOffer) => {
+    setAcceptingOffer(offer.id);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('accept-order-offer', {
+        body: { offerId: offer.id, orderId: offer.order_id }
+      });
+
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.message || data.error);
+        // Remove this offer from local state since it's no longer available
+        setPendingOffers(prev => prev.filter(o => o.id !== offer.id));
+        setAcceptingOffer(null);
+        return;
+      }
+
+      toast.success('Pedido aceito! Você agora é responsável pela entrega.');
+      setPendingOffers(prev => prev.filter(o => o.id !== offer.id));
+      loadDriverData();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao aceitar pedido');
+    } finally {
+      setAcceptingOffer(null);
+    }
   };
 
   // Accept delivery - changes status from awaiting_driver to ready
@@ -506,27 +658,105 @@ export default function DriverDashboard() {
           </CardContent>
         </Card>
 
+        {/* Pending Offers - Competitive System */}
+        {pendingOffers.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-destructive animate-bounce" />
+              <h2 className="font-semibold text-lg text-destructive">
+                Ofertas Disponíveis ({pendingOffers.length})
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Aceite rápido! Quem pegar primeiro, leva.
+            </p>
+
+            {pendingOffers.map((offer) => (
+              <Card key={offer.id} className="ring-2 ring-destructive animate-pulse">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive" className="text-xs animate-bounce">Disponível!</Badge>
+                      <CardTitle className="text-base">{offer.order.company?.name || 'Loja'}</CardTitle>
+                    </div>
+                    <Badge variant="outline">
+                      {offer.order.payment_method === 'cash' && 'Dinheiro'}
+                      {offer.order.payment_method === 'card_on_delivery' && 'Cartão'}
+                      {offer.order.payment_method === 'pix' && 'PIX'}
+                      {offer.order.payment_method === 'online' && 'Pago'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>{format(new Date(offer.order.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* Customer */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{offer.order.customer_name}</span>
+                    <span className="font-bold text-lg text-primary">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(offer.order.total)}
+                    </span>
+                  </div>
+
+                  {/* Address Preview */}
+                  {offer.order.delivery_address && (
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {offer.order.delivery_address.street}, {offer.order.delivery_address.number} - {offer.order.delivery_address.neighborhood}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      className="flex-1"
+                      size="lg"
+                      variant="destructive"
+                      onClick={() => acceptOffer(offer)}
+                      disabled={acceptingOffer === offer.id}
+                    >
+                      {acceptingOffer === offer.id ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <ThumbsUp className="h-4 w-4 mr-2" />
+                      )}
+                      Aceitar Entrega
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Orders */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Entregas ({orders.length})
+              Minhas Entregas ({orders.length})
             </h2>
-            <Button variant="outline" size="sm" onClick={loadDriverData}>
+            <Button variant="outline" size="sm" onClick={() => { loadDriverData(); loadPendingOffers(); }}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Atualizar
             </Button>
           </div>
 
-          {orders.length === 0 ? (
+          {orders.length === 0 && pendingOffers.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">Nenhuma entrega pendente</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Fique disponível para receber ofertas de entrega
+                </p>
               </CardContent>
             </Card>
-          ) : (
+          ) : orders.length === 0 ? null : (
             orders.map((order, index) => (
               <Card key={order.id} className={order.status === 'awaiting_driver' ? 'ring-2 ring-destructive animate-pulse' : index === 0 ? 'ring-2 ring-primary' : ''}>
                 <CardHeader className="pb-2">

@@ -14,6 +14,7 @@ import {
   UserPlus,
   Users,
   AlertTriangle,
+  Send,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -262,6 +263,7 @@ export default function OrdersManagement() {
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: 'Entregador atribuído',
@@ -283,12 +285,52 @@ export default function OrdersManagement() {
     }
   };
 
+  // Broadcast order to all available drivers - competitive system
+  const broadcastOrderToDrivers = async (orderId: string) => {
+    if (!companyId) return;
+    
+    setAssigningDriver(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('broadcast-order-offers', {
+        body: { orderId, companyId }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (data.offersCreated === 0) {
+        toast({
+          title: 'Nenhum entregador disponível',
+          description: 'Não há entregadores online no momento. Tente novamente mais tarde.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Pedido enviado para entregadores',
+          description: `${data.offersCreated} entregador(es) notificado(s): ${data.driverNames?.join(', ')}`,
+        });
+      }
+
+      loadCompanyAndOrders();
+      loadAvailableDrivers();
+      setSelectedOrder(null);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao enviar para entregadores',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setAssigningDriver(false);
+    }
+  };
+
   const reassignDriverToOrder = async (orderId: string, newDriverId: string) => {
     if (!companyId) return;
     
     setAssigningDriver(true);
     try {
-      // First, get current order to free up the previous driver
+      // First, get current order to free up the previous driver and cancel pending offers
       const order = orders.find(o => o.id === orderId);
       if (order?.delivery_driver_id) {
         // Free up previous driver
@@ -300,6 +342,13 @@ export default function OrdersManagement() {
           })
           .eq('id', order.delivery_driver_id);
       }
+
+      // Cancel any pending offers for this order
+      await supabase
+        .from('order_offers')
+        .update({ status: 'cancelled' })
+        .eq('order_id', orderId)
+        .eq('status', 'pending');
 
       // Assign new driver using the edge function
       const { data, error } = await supabase.functions.invoke('assign-driver', {
@@ -715,8 +764,34 @@ export default function OrdersManagement() {
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <p className="text-sm text-muted-foreground">Nenhum entregador atribuído</p>
+                      
+                      {/* Broadcast to all drivers button */}
+                      {availableDrivers.filter(d => d.is_available && d.driver_status === 'available').length > 0 && (
+                        <div className="space-y-2">
+                          <Button
+                            variant="default"
+                            className="w-full"
+                            onClick={() => broadcastOrderToDrivers(selectedOrder.id)}
+                            disabled={assigningDriver}
+                          >
+                            {assigningDriver ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4 mr-2" />
+                            )}
+                            Enviar para Todos os Entregadores
+                          </Button>
+                          <p className="text-xs text-muted-foreground text-center">
+                            Quem aceitar primeiro, leva a entrega
+                          </p>
+                        </div>
+                      )}
+
+                      <Separator />
+                      
+                      <p className="text-sm font-medium">Ou atribuir diretamente:</p>
                       {availableDrivers.filter(d => d.is_available && d.driver_status === 'available').length > 0 ? (
                         <div className="grid gap-2">
                           {availableDrivers
