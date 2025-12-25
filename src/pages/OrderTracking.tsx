@@ -22,6 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import DeliveryMap from '@/components/map/DeliveryMap';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
+import { OrderReviewForm } from '@/components/orders/OrderReviewForm';
 
 interface OrderItem {
   id: string;
@@ -44,6 +45,7 @@ interface Order {
   estimated_delivery_time: string | null;
   notes: string | null;
   delivery_driver_id: string | null;
+  company_id: string;
   company: {
     name: string;
     phone: string | null;
@@ -52,6 +54,7 @@ interface Order {
     address: string | null;
   };
   items: OrderItem[];
+  hasReview?: boolean;
 }
 
 const statusConfig: Record<string, { label: string; shortLabel: string; icon: typeof Package; color: string; step: number }> = {
@@ -136,10 +139,18 @@ export default function OrderTracking() {
         .select('*')
         .eq('order_id', orderId);
 
+      // Check if already reviewed
+      const { data: reviewData } = await supabase
+        .from('order_reviews')
+        .select('id')
+        .eq('order_id', orderId)
+        .maybeSingle();
+
       setOrder({
         ...orderData,
         company: orderData.company as Order['company'],
         items: itemsData || [],
+        hasReview: !!reviewData,
       });
       setLastUpdate(new Date());
     } catch (err: any) {
@@ -479,6 +490,16 @@ export default function OrderTracking() {
               </a>
             </CardContent>
           </Card>
+        )}
+
+        {/* Review Form - Show after delivery */}
+        {order.status === 'delivered' && !order.hasReview && (
+          <OrderReviewForm
+            orderId={order.id}
+            companyId={order.company_id}
+            companyName={order.company.name}
+            onReviewSubmitted={() => setOrder(prev => prev ? { ...prev, hasReview: true } : null)}
+          />
         )}
 
         {/* Order Info */}

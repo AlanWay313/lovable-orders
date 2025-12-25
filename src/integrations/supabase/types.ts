@@ -463,6 +463,54 @@ export type Database = {
           },
         ]
       }
+      order_reviews: {
+        Row: {
+          comment: string | null
+          company_id: string
+          created_at: string
+          delivery_rating: number | null
+          food_rating: number | null
+          id: string
+          order_id: string
+          rating: number
+        }
+        Insert: {
+          comment?: string | null
+          company_id: string
+          created_at?: string
+          delivery_rating?: number | null
+          food_rating?: number | null
+          id?: string
+          order_id: string
+          rating: number
+        }
+        Update: {
+          comment?: string | null
+          company_id?: string
+          created_at?: string
+          delivery_rating?: number | null
+          food_rating?: number | null
+          id?: string
+          order_id?: string
+          rating?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_reviews_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_reviews_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           change_for: number | null
