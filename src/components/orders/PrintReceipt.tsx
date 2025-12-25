@@ -57,9 +57,10 @@ const paymentMethodLabels: Record<string, string> = {
 
 export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const kitchenPrintRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = () => {
-    const printContent = printRef.current;
+  const handlePrint = (isKitchen: boolean = false) => {
+    const printContent = isKitchen ? kitchenPrintRef.current : printRef.current;
     if (!printContent) return;
 
     const printWindow = window.open('', '_blank', 'width=300,height=600');
@@ -98,6 +99,15 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
           font-size: 14px;
           font-weight: bold;
         }
+        .kitchen-title {
+          font-size: 18px;
+          font-weight: bold;
+          text-transform: uppercase;
+          background: #000;
+          color: #fff;
+          padding: 4px 8px;
+          margin-bottom: 4px;
+        }
         .date {
           font-size: 10px;
           color: #666;
@@ -125,12 +135,30 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
           margin: 6px 0;
           flex-wrap: wrap;
         }
+        .item-kitchen {
+          margin: 10px 0;
+          padding: 8px;
+          border: 1px solid #000;
+        }
         .item-name {
           flex: 1;
           font-weight: bold;
         }
+        .item-name-kitchen {
+          font-weight: bold;
+          font-size: 14px;
+        }
         .item-qty {
           margin-right: 8px;
+        }
+        .item-qty-kitchen {
+          font-size: 16px;
+          font-weight: bold;
+          background: #000;
+          color: #fff;
+          padding: 2px 8px;
+          display: inline-block;
+          margin-bottom: 4px;
         }
         .item-price {
           text-align: right;
@@ -141,12 +169,26 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
           color: #666;
           margin-left: 16px;
         }
+        .item-options-kitchen {
+          font-size: 12px;
+          margin-top: 4px;
+          padding-left: 8px;
+          border-left: 2px solid #000;
+        }
         .item-notes {
           width: 100%;
           font-size: 10px;
           font-style: italic;
           margin-left: 16px;
           color: #333;
+        }
+        .item-notes-kitchen {
+          font-size: 12px;
+          font-weight: bold;
+          margin-top: 6px;
+          padding: 4px;
+          background: #fff3cd;
+          border: 1px solid #ffc107;
         }
         .totals {
           margin-top: 8px;
@@ -178,6 +220,13 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
           background: #fff3cd;
           border: 1px solid #ffc107;
         }
+        .notes-kitchen {
+          margin-top: 12px;
+          padding: 10px;
+          background: #fff3cd;
+          border: 2px solid #ffc107;
+          font-size: 12px;
+        }
         .notes-title {
           font-weight: bold;
           margin-bottom: 4px;
@@ -206,7 +255,7 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Comanda #${order.id.slice(0, 8)}</title>
+          <title>${isKitchen ? 'Cozinha' : 'Comanda'} #${order.id.slice(0, 8)}</title>
           ${styles}
         </head>
         <body>
@@ -226,17 +275,28 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
 
   return (
     <>
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={handlePrint}
-        className="gap-2"
-      >
-        <Printer className="h-4 w-4" />
-        Imprimir Comanda
-      </Button>
+      <div className="flex gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handlePrint(false)}
+          className="gap-2"
+        >
+          <Printer className="h-4 w-4" />
+          Comanda
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => handlePrint(true)}
+          className="gap-2"
+        >
+          <Printer className="h-4 w-4" />
+          Cozinha
+        </Button>
+      </div>
 
-      {/* Hidden print content */}
+      {/* Hidden print content - Full Receipt */}
       <div className="hidden">
         <div ref={printRef}>
           {/* Header */}
@@ -341,6 +401,57 @@ export function PrintReceipt({ order, companyName = 'Loja' }: PrintReceiptProps)
             <div className="divider"></div>
             <p>Obrigado pela preferência!</p>
             <p>Volte sempre!</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden print content - Kitchen Receipt */}
+      <div className="hidden">
+        <div ref={kitchenPrintRef}>
+          {/* Header */}
+          <div className="header">
+            <div className="kitchen-title">COZINHA</div>
+            <div className="order-number">PEDIDO #{order.id.slice(0, 8).toUpperCase()}</div>
+            <div className="date">
+              {format(new Date(order.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </div>
+          </div>
+
+          {/* Items - Kitchen Format */}
+          <div className="section">
+            {order.order_items?.map((item) => {
+              const options = Array.isArray(item.options) 
+                ? (item.options as { name: string; priceModifier: number }[]) 
+                : [];
+              return (
+                <div key={item.id} className="item-kitchen">
+                  <div className="item-qty-kitchen">{item.quantity}x</div>
+                  <div className="item-name-kitchen">{item.product_name}</div>
+                  {options.length > 0 && (
+                    <div className="item-options-kitchen">
+                      {options.map((o) => o.name).join(', ')}
+                    </div>
+                  )}
+                  {item.notes && (
+                    <div className="item-notes-kitchen">⚠ {item.notes}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* General Notes */}
+          {order.notes && (
+            <div className="notes-kitchen">
+              <div className="notes-title">⚠ OBSERVAÇÕES DO PEDIDO:</div>
+              <p>{order.notes}</p>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="footer">
+            <div className="divider"></div>
+            <p>#{order.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
       </div>
