@@ -21,6 +21,7 @@ import {
   LogIn,
   LogOut,
   Plus,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,6 +92,7 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 interface CheckoutPageProps {
   companyId: string;
   companyName: string;
+  companyPhone?: string | null;
   deliveryFee: number;
   minOrderValue: number;
   onBack: () => void;
@@ -106,7 +108,7 @@ interface OrderSummary {
   total: number;
 }
 
-export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValue, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
+export function CheckoutPage({ companyId, companyName, companyPhone, deliveryFee, minOrderValue, onBack, isStoreOpen = true, pixKey, pixKeyType }: CheckoutPageProps) {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
   const { toast } = useToast();
@@ -125,6 +127,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderSummary, setOrderSummary] = useState<OrderSummary | null>(null);
+  const [orderPaymentMethod, setOrderPaymentMethod] = useState<string | null>(null);
   
   // Coupon state
   const [couponCode, setCouponCode] = useState('');
@@ -531,6 +534,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
         total,
       });
       setOrderId(newOrderId);
+      setOrderPaymentMethod(data.paymentMethod);
       setOrderComplete(true);
       clearCart();
 
@@ -551,6 +555,42 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
   };
 
   if (orderComplete) {
+    // Generate WhatsApp message
+    const generateWhatsAppMessage = () => {
+      const orderCode = orderId?.slice(0, 8).toUpperCase();
+      const trackingUrl = `${window.location.origin}/track/${orderId}`;
+      
+      let message = `🛒 *PEDIDO #${orderCode}*\n\n`;
+      message += `📋 *Itens:*\n`;
+      items.forEach(item => {
+        message += `• ${item.quantity}x ${item.productName}`;
+        if (item.options.length > 0) {
+          message += ` (${item.options.map(o => o.name).join(', ')})`;
+        }
+        message += `\n`;
+      });
+      message += `\n💰 *Total: R$ ${(orderSummary?.total ?? 0).toFixed(2)}*\n`;
+      message += `\n📍 Acompanhe seu pedido: ${trackingUrl}`;
+      
+      if (orderPaymentMethod === 'pix') {
+        message += `\n\n⚠️ *PAGAMENTO PIX*\n`;
+        message += `Por favor, envie o comprovante de pagamento para confirmar seu pedido.`;
+        if (pixKey) {
+          message += `\n\n🔑 *Chave PIX:* ${pixKey}`;
+          if (pixKeyType) {
+            message += ` (${pixKeyType})`;
+          }
+        }
+      }
+      
+      return encodeURIComponent(message);
+    };
+
+    const whatsappNumber = companyPhone?.replace(/\D/g, '') || '';
+    const whatsappUrl = whatsappNumber 
+      ? `https://wa.me/55${whatsappNumber}?text=${generateWhatsAppMessage()}`
+      : null;
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center animate-scale-in">
@@ -561,6 +601,28 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
           <p className="text-muted-foreground mb-6">
             Seu pedido #{orderId?.slice(0, 8)} foi enviado para {companyName}
           </p>
+          
+          {/* PIX Payment Alert */}
+          {orderPaymentMethod === 'pix' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-amber-800">Pagamento via PIX</p>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Envie o comprovante de pagamento pelo WhatsApp para confirmar seu pedido.
+                  </p>
+                  {pixKey && (
+                    <div className="mt-2 p-2 bg-white rounded-lg border border-amber-200">
+                      <p className="text-xs text-amber-600">Chave PIX ({pixKeyType || 'Chave'})</p>
+                      <p className="font-mono text-sm font-medium text-amber-900 break-all">{pixKey}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-card rounded-xl border border-border p-6 mb-6 text-left">
             <h3 className="font-medium mb-4">Resumo</h3>
             <div className="space-y-2 text-sm">
@@ -584,16 +646,33 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
               </div>
             </div>
           </div>
+          
           <div className="flex flex-col gap-3">
-            <Button onClick={onBack} variant="outline" className="w-full">
-              Voltar ao Cardápio
-            </Button>
+            {/* WhatsApp Button */}
+            {whatsappUrl && (
+              <Button 
+                asChild
+                className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white"
+              >
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle className="mr-2 h-5 w-5" />
+                  {orderPaymentMethod === 'pix' 
+                    ? 'Enviar Comprovante via WhatsApp' 
+                    : 'Acompanhar pelo WhatsApp'}
+                </a>
+              </Button>
+            )}
+            
             <Button 
-              variant="ghost" 
+              variant="outline" 
               className="w-full"
-              onClick={() => navigate('/orders')}
+              onClick={() => navigate(`/track/${orderId}`)}
             >
-              Ver meus pedidos
+              Acompanhar Pedido Online
+            </Button>
+            
+            <Button onClick={onBack} variant="ghost" className="w-full">
+              Voltar ao Cardápio
             </Button>
           </div>
         </div>
