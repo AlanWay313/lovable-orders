@@ -62,49 +62,21 @@ export default function DriverLogin() {
     setLoading(true);
 
     try {
-      // Use edge function to validate driver email and get driver info
-      const { data: validationData, error: validationError } = await supabase.functions.invoke(
-        'validate-driver-email',
-        { body: { email: email.toLowerCase().trim() } }
-      );
-
-      if (validationError) throw validationError;
-
-      if (!validationData.valid) {
-        toast.error('Email não encontrado', {
-          description: 'Este email não está cadastrado como entregador.',
-        });
-        setLoading(false);
-        return;
-      }
-
-      if (!validationData.isActive) {
-        toast.error('Conta desativada', {
-          description: 'Sua conta de entregador está desativada. Entre em contato com o estabelecimento.',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Sign in directly without OTP verification
-      // Use signInWithPassword with a default password or magic link without verification
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email: email.toLowerCase().trim(),
-        options: {
-          shouldCreateUser: true,
-        },
-      });
-
-      if (error) throw error;
-
-      // Since we're skipping OTP verification, we need to use a different approach
-      // Call a backend function that creates a session for the driver
+      // Login direto via edge function - sem necessidade de OTP ou confirmação de email
       const { data: loginData, error: loginError } = await supabase.functions.invoke(
         'driver-direct-login',
         { body: { email: email.toLowerCase().trim() } }
       );
 
       if (loginError) throw loginError;
+
+      if (loginData?.error) {
+        toast.error('Erro ao fazer login', {
+          description: loginData.error,
+        });
+        setLoading(false);
+        return;
+      }
 
       if (loginData?.session) {
         // Set the session manually
