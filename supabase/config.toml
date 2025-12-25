@@ -40,7 +40,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.assign-driver]
-verify_jwt = true
+verify_jwt = false
 
 [functions.check-pending-driver-acceptance]
 verify_jwt = false
