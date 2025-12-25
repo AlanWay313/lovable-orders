@@ -797,8 +797,8 @@ export default function DriversManagement() {
                                         <Badge variant="destructive" className="text-xs">Próxima</Badge>
                                       )}
                                       <span className="font-medium">#{order.id.slice(0, 8)}</span>
-                                      <Badge variant={order.status === 'out_for_delivery' ? 'default' : 'secondary'}>
-                                        {order.status === 'out_for_delivery' ? 'Em entrega' : order.status === 'awaiting_driver' ? 'Aguardando' : 'Pronto'}
+                                      <Badge variant={order.status === 'out_for_delivery' ? 'default' : order.status === 'awaiting_driver' ? 'destructive' : 'secondary'}>
+                                        {order.status === 'out_for_delivery' ? 'Em entrega' : order.status === 'awaiting_driver' ? 'Aguardando Aceite' : 'Pronto'}
                                       </Badge>
                                     </div>
                                     <p className="text-sm font-medium">{order.customer_name}</p>
