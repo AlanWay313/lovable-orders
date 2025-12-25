@@ -307,6 +307,7 @@ export default function OrdersManagement() {
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: 'Entregador reatribuído',
