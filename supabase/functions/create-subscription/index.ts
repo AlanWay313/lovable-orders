@@ -7,27 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PLANS = {
-  basic: {
-    priceId: "price_1ShaIeCjIGOfNgffXczeafPR",
-    productId: "prod_Teu6Hq16M0mYW1",
-    name: "Plano Básico",
-    orderLimit: 2000,
-  },
-  pro: {
-    priceId: "price_1ShaJDCjIGOfNgffUq4LolV2",
-    productId: "prod_Teu7JJnhWCv9MX",
-    name: "Plano Pro",
-    orderLimit: 5000,
-  },
-  enterprise: {
-    priceId: "price_1ShaKMCjIGOfNgffSkn5Tlqi",
-    productId: "prod_Teu8s4ks6y3g3T",
-    name: "Plano Enterprise",
-    orderLimit: -1, // unlimited
-  },
-};
-
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-SUBSCRIPTION] ${step}${detailsStr}`);
@@ -61,13 +40,30 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const { planKey } = await req.json();
-    const plan = PLANS[planKey as keyof typeof PLANS];
     
-    if (!plan) {
+    // Fetch plan from database using service role
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+    
+    const { data: plan, error: planError } = await adminClient
+      .from("subscription_plans")
+      .select("*")
+      .eq("key", planKey)
+      .eq("is_active", true)
+      .single();
+    
+    if (planError || !plan) {
+      logStep("Plan not found", { planKey, error: planError?.message });
       throw new Error(`Invalid plan: ${planKey}`);
     }
+    
+    if (!plan.stripe_price_id) {
+      throw new Error(`Plan ${planKey} does not have a Stripe price configured`);
+    }
 
-    logStep("Plan selected", { planKey, priceId: plan.priceId });
+    logStep("Plan selected", { planKey, priceId: plan.stripe_price_id, price: plan.price });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -88,11 +84,6 @@ serve(async (req) => {
     }
 
     // Update company with stripe customer id
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
     await adminClient
       .from("companies")
       .update({ stripe_customer_id: customerId })
@@ -102,7 +93,7 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      line_items: [{ price: plan.priceId, quantity: 1 }],
+      line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
       mode: "subscription",
       payment_method_types: ["card"],
       success_url: `${origin}/dashboard/plans?subscription=success`,

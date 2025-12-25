@@ -18,64 +18,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-const PLANS = [
-  {
-    key: 'free',
-    name: 'Gratuito',
-    price: 0,
-    orderLimit: 1000,
-    icon: Zap,
-    features: [
-      'Até 1.000 pedidos/mês',
-      'Cardápio digital',
-      'Gestão de pedidos',
-      'Notificações em tempo real',
-    ],
-  },
-  {
-    key: 'basic',
-    name: 'Básico',
-    price: 29.9,
-    orderLimit: 2000,
-    icon: Crown,
-    features: [
-      'Até 2.000 pedidos/mês',
-      'Tudo do plano gratuito',
-      'Cupons de desconto',
-      'Relatórios avançados',
-      'Suporte prioritário',
-    ],
-  },
-  {
-    key: 'pro',
-    name: 'Pro',
-    price: 49.9,
-    orderLimit: 5000,
-    icon: Crown,
-    popular: true,
-    features: [
-      'Até 5.000 pedidos/mês',
-      'Tudo do plano básico',
-      'Múltiplos entregadores',
-      'Integrações avançadas',
-      'API personalizada',
-    ],
-  },
-  {
-    key: 'enterprise',
-    name: 'Enterprise',
-    price: 99.9,
-    orderLimit: -1,
-    icon: Building2,
-    features: [
-      'Pedidos ilimitados',
-      'Tudo do plano pro',
-      'Gerente de conta dedicado',
-      'SLA garantido',
-      'Customizações sob demanda',
-    ],
-  },
-];
+interface Plan {
+  key: string;
+  name: string;
+  description: string | null;
+  price: number;
+  order_limit: number;
+  stripe_price_id: string | null;
+  features: string[];
+  is_popular?: boolean;
+}
 
 interface SubscriptionData {
   subscribed: boolean;
@@ -93,6 +45,7 @@ export default function PlansPage() {
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [company, setCompany] = useState<any>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
 
   useEffect(() => {
     if (searchParams.get('subscription') === 'success') {
@@ -112,6 +65,28 @@ export default function PlansPage() {
     if (!user) return;
     setLoading(true);
     try {
+      // Load plans from database
+      const { data: plansData, error: plansError } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (plansError) throw plansError;
+
+      setPlans(plansData?.map(p => ({
+        key: p.key,
+        name: p.name,
+        description: p.description,
+        price: Number(p.price),
+        order_limit: p.order_limit,
+        stripe_price_id: p.stripe_price_id,
+        features: Array.isArray(p.features) 
+          ? (p.features as unknown as string[]).map(f => String(f))
+          : [],
+        is_popular: p.key === 'pro',
+      })) || []);
+
       // Load company data
       const { data: companyData } = await supabase
         .from('companies')
@@ -123,8 +98,13 @@ export default function PlansPage() {
 
       // Check subscription
       await checkSubscription();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      toast({
+        title: 'Erro ao carregar dados',
+        description: error.message,
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -223,6 +203,18 @@ export default function PlansPage() {
     }
   };
 
+  const getIconForPlan = (key: string) => {
+    switch (key) {
+      case 'enterprise':
+        return Building2;
+      case 'pro':
+      case 'basic':
+        return Crown;
+      default:
+        return Zap;
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -235,7 +227,8 @@ export default function PlansPage() {
 
   const currentPlan = subscription?.plan || 'free';
   const orderCount = company?.monthly_order_count || 0;
-  const orderLimit = subscription?.orderLimit || 1000;
+  const currentPlanData = plans.find(p => p.key === currentPlan);
+  const orderLimit = currentPlanData?.order_limit || subscription?.orderLimit || 1000;
 
   return (
     <DashboardLayout>
@@ -312,19 +305,19 @@ export default function PlansPage() {
 
         {/* Plans Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {PLANS.map((plan) => {
-            const Icon = plan.icon;
+          {plans.map((plan) => {
+            const Icon = getIconForPlan(plan.key);
             const isCurrentPlan = currentPlan === plan.key;
-            const isUpgrade = PLANS.findIndex(p => p.key === plan.key) > PLANS.findIndex(p => p.key === currentPlan);
+            const isUpgrade = plans.findIndex(p => p.key === plan.key) > plans.findIndex(p => p.key === currentPlan);
 
             return (
               <Card
                 key={plan.key}
                 className={`relative ${
-                  plan.popular ? 'border-primary shadow-lg' : ''
+                  plan.is_popular ? 'border-primary shadow-lg' : ''
                 } ${isCurrentPlan ? 'ring-2 ring-primary' : ''}`}
               >
-                {plan.popular && (
+                {plan.is_popular && (
                   <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
                     Mais Popular
                   </Badge>
@@ -340,9 +333,9 @@ export default function PlansPage() {
                   </div>
                   <CardTitle className="font-display">{plan.name}</CardTitle>
                   <CardDescription>
-                    {plan.orderLimit === -1
+                    {plan.order_limit === -1
                       ? 'Pedidos ilimitados'
-                      : `Até ${plan.orderLimit.toLocaleString()} pedidos/mês`}
+                      : `Até ${plan.order_limit.toLocaleString()} pedidos/mês`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="text-center">
@@ -361,8 +354,8 @@ export default function PlansPage() {
                     ))}
                   </ul>
                   <Button
-                    className={`w-full ${plan.popular ? 'gradient-primary text-primary-foreground' : ''}`}
-                    variant={plan.popular ? 'default' : 'outline'}
+                    className={`w-full ${plan.is_popular ? 'gradient-primary text-primary-foreground' : ''}`}
+                    variant={plan.is_popular ? 'default' : 'outline'}
                     disabled={isCurrentPlan || plan.key === 'free' || subscribing !== null}
                     onClick={() => handleSubscribe(plan.key)}
                   >

@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import PublicMenu from "./pages/PublicMenu";
 import AdminCompanies from "./pages/admin/AdminCompanies";
+import AdminPlans from "./pages/admin/AdminPlans";
 import StoreSettings from "./pages/store/StoreSettings";
 import MenuManagement from "./pages/store/MenuManagement";
 import OrdersManagement from "./pages/store/OrdersManagement";
@@ -118,6 +119,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRoles={['super_admin']}>
                   <AdminCompanies />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/admin/plans"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin']}>
+                  <AdminPlans />
                 </ProtectedRoute>
               }
             />
