@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.assign-driver]
 verify_jwt = true
+
+[functions.check-pending-driver-acceptance]
+verify_jwt = false
