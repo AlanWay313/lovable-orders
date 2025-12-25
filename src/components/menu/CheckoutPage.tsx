@@ -427,6 +427,22 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
           .eq('id', selectedAddress.id);
       }
 
+      // Calculate estimated preparation time based on products
+      const productIds = items.map(item => item.productId);
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('id, preparation_time_minutes')
+        .in('id', productIds);
+
+      // Get max preparation time from all products (parallel preparation)
+      // Add 15 minutes base delivery time
+      const maxPrepTime = productsData?.reduce((max, product) => {
+        return Math.max(max, product.preparation_time_minutes || 30);
+      }, 0) || 30;
+      
+      const estimatedDeliveryTime = new Date();
+      estimatedDeliveryTime.setMinutes(estimatedDeliveryTime.getMinutes() + maxPrepTime + 15);
+
       // Create order with pre-generated ID to avoid RLS issues with .select()
       const newOrderId = crypto.randomUUID();
       
@@ -449,6 +465,7 @@ export function CheckoutPage({ companyId, companyName, deliveryFee, minOrderValu
           change_for: data.paymentMethod === 'cash' && data.needsChange ? data.changeFor : null,
           coupon_id: appliedCoupon?.id || null,
           discount_amount: discountAmount,
+          estimated_delivery_time: estimatedDeliveryTime.toISOString(),
         });
 
       if (orderError) throw orderError;
