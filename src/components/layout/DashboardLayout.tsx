@@ -14,6 +14,7 @@ import {
   Ticket,
   Crown,
   Tag,
+  Sliders,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["super_admin"] },
+  { label: "Gerenciar Planos", href: "/dashboard/admin/plans", icon: Sliders, roles: ["super_admin"] },
   { label: "Minha Loja", href: "/dashboard/store", icon: Store, roles: ["store_owner"] },
   { label: "Cardápio", href: "/dashboard/menu", icon: UtensilsCrossed, roles: ["store_owner"] },
   { label: "Pedidos", href: "/dashboard/orders", icon: ShoppingBag, roles: ["store_owner", "delivery_driver"] },
