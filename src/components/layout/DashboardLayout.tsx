@@ -15,6 +15,7 @@ import {
   Crown,
   Tag,
   Sliders,
+  ScrollText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Empresas", href: "/dashboard/companies", icon: Store, roles: ["super_admin"] },
   { label: "Gerenciar Planos", href: "/dashboard/admin/plans", icon: Sliders, roles: ["super_admin"] },
+  { label: "Logs do Sistema", href: "/dashboard/admin/logs", icon: ScrollText, roles: ["super_admin"] },
   { label: "Minha Loja", href: "/dashboard/store", icon: Store, roles: ["store_owner"] },
   { label: "Cardápio", href: "/dashboard/menu", icon: UtensilsCrossed, roles: ["store_owner"] },
   { label: "Pedidos", href: "/dashboard/orders", icon: ShoppingBag, roles: ["store_owner", "delivery_driver"] },
