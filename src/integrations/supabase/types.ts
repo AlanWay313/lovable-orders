@@ -463,6 +463,58 @@ export type Database = {
           },
         ]
       }
+      order_offers: {
+        Row: {
+          company_id: string
+          created_at: string
+          driver_id: string
+          id: string
+          order_id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          driver_id: string
+          id?: string
+          order_id: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          driver_id?: string
+          id?: string
+          order_id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_offers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_offers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_offers_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_reviews: {
         Row: {
           comment: string | null

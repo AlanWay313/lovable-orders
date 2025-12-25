@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.check-pending-driver-acceptance]
 verify_jwt = false
+
+[functions.broadcast-order-offers]
+verify_jwt = false
+
+[functions.accept-order-offer]
+verify_jwt = false
