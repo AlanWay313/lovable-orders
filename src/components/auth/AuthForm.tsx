@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Eye, EyeOff, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ const loginSchema = z.object({
 
 const signupSchema = loginSchema.extend({
   fullName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+  companyName: z.string().min(2, 'Nome da empresa deve ter pelo menos 2 caracteres'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'As senhas não coincidem',
@@ -156,10 +157,10 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
           return;
         }
         
-        // After signup, the trigger will auto-link if email matches a driver
+        // Get the new user
         const { data: { user: newUser } } = await supabase.auth.getUser();
         if (newUser) {
-          // Check if user was linked as a driver
+          // Check if user was linked as a driver first
           const { data: driverCheck } = await supabase
             .from('delivery_drivers')
             .select('id')
@@ -175,13 +176,54 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
             navigate('/driver');
             return;
           }
+
+          // Generate a unique slug for the company
+          const baseSlug = data.companyName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          const uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
+
+          // Create company for the new user
+          const { error: companyError } = await supabase
+            .from('companies')
+            .insert({
+              name: data.companyName,
+              slug: uniqueSlug,
+              owner_id: newUser.id,
+              status: 'approved', // Auto-approve new companies
+            });
+
+          if (companyError) {
+            console.error('Error creating company:', companyError);
+            toast({
+              title: 'Erro ao criar empresa',
+              description: 'Sua conta foi criada, mas houve um erro ao criar a empresa. Entre em contato com o suporte.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          // Add store_owner role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: newUser.id,
+              role: 'store_owner',
+            });
+
+          if (roleError) {
+            console.error('Error adding store_owner role:', roleError);
+          }
         }
         
         toast({
           title: 'Conta criada!',
-          description: 'Sua conta foi criada com sucesso',
+          description: 'Sua empresa foi criada com sucesso. Configure seu cardápio!',
         });
-        navigate('/');
+        navigate('/dashboard');
       }
       reset();
     } finally {
@@ -190,18 +232,39 @@ export function AuthForm({ mode, onToggleMode }: AuthFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {!isLogin && (
+        <div className="space-y-2">
+          <Label htmlFor="companyName" className="text-foreground">
+            Nome da Empresa
+          </Label>
+          <div className="relative">
+            <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="companyName"
+              type="text"
+              placeholder="Nome do seu negócio"
+              className="pl-10"
+              {...register('companyName')}
+            />
+          </div>
+          {errors.companyName && (
+            <p className="text-sm text-destructive">{errors.companyName.message}</p>
+          )}
+        </div>
+      )}
+
       {!isLogin && (
         <div className="space-y-2">
           <Label htmlFor="fullName" className="text-foreground">
-            Nome completo
+            Seu Nome
           </Label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="fullName"
               type="text"
-              placeholder="Seu nome"
+              placeholder="Seu nome completo"
               className="pl-10"
               {...register('fullName')}
             />
