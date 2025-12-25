@@ -629,7 +629,35 @@ export function CheckoutPage({ companyId, companyName, companyPhone, deliveryFee
           )}
 
           <div className="bg-card rounded-xl border border-border p-6 mb-6 text-left">
-            <h3 className="font-medium mb-4">Resumo</h3>
+            <h3 className="font-medium mb-4">Resumo do Pedido</h3>
+            
+            {/* Order Items */}
+            <div className="space-y-2 mb-4 pb-4 border-b border-border">
+              {orderItems.map((item, index) => (
+                <div key={index} className="text-sm">
+                  <div className="flex justify-between">
+                    <span>
+                      <span className="font-medium">{item.quantity}x</span> {item.productName}
+                    </span>
+                    <span className="text-muted-foreground">
+                      R$ {((item.price + item.options.reduce((sum, o) => sum + o.priceModifier, 0)) * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                  {item.options.length > 0 && (
+                    <p className="text-xs text-muted-foreground ml-4">
+                      + {item.options.map(o => o.name).join(', ')}
+                    </p>
+                  )}
+                  {item.notes && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 ml-4 italic">
+                      Obs: {item.notes}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Totals */}
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
