@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useRealtimeDriverOrders } from '@/hooks/useRealtimeDriverOrders';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
+import { InstallAppPrompt } from '@/components/InstallAppPrompt';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -647,13 +648,16 @@ export default function DriverDashboard() {
               </p>
             )}
 
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2 border-t border-border space-y-3">
               <PushNotificationButton
                 companyId={driver?.company_id}
                 userId={user?.id}
                 userType="driver"
                 className="w-full"
               />
+              <div className="flex justify-center">
+                <InstallAppPrompt />
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -28,6 +28,7 @@ import { useCart, CartProvider, CartItem } from '@/hooks/useCart';
 import { ProductModal, CartDrawer } from '@/components/menu/ProductModal';
 import { CheckoutPage } from '@/components/menu/CheckoutPage';
 import { TrackOrderModal } from '@/components/menu/TrackOrderModal';
+import { InstallAppPrompt } from '@/components/InstallAppPrompt';
 import { cn } from '@/lib/utils';
 import { checkStoreOpen, formatTodayHours } from '@/lib/storeHours';
 import { OperatingHours } from '@/components/store/OperatingHoursEditor';
@@ -403,6 +404,11 @@ function PublicMenuContent() {
                 )}
               </div>
             </div>
+          </div>
+          
+          {/* Install App Button */}
+          <div className="mt-3 pt-3 border-t border-border flex justify-center">
+            <InstallAppPrompt />
           </div>
         </div>
       </div>
