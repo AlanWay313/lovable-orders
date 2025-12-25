@@ -128,6 +128,7 @@ export function CheckoutPage({ companyId, companyName, companyPhone, deliveryFee
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderSummary, setOrderSummary] = useState<OrderSummary | null>(null);
   const [orderPaymentMethod, setOrderPaymentMethod] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<typeof items>([]);
   
   // Coupon state
   const [couponCode, setCouponCode] = useState('');
@@ -526,7 +527,8 @@ export function CheckoutPage({ companyId, companyName, companyPhone, deliveryFee
         }
       }
 
-      // Success
+      // Success - save items before clearing cart
+      setOrderItems([...items]);
       setOrderSummary({
         subtotal,
         discountAmount,
@@ -562,10 +564,13 @@ export function CheckoutPage({ companyId, companyName, companyPhone, deliveryFee
       
       let message = `🛒 *PEDIDO #${orderCode}*\n\n`;
       message += `📋 *Itens:*\n`;
-      items.forEach(item => {
+      orderItems.forEach(item => {
         message += `• ${item.quantity}x ${item.productName}`;
         if (item.options.length > 0) {
           message += ` (${item.options.map(o => o.name).join(', ')})`;
+        }
+        if (item.notes) {
+          message += ` - Obs: ${item.notes}`;
         }
         message += `\n`;
       });

@@ -29,6 +29,16 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+interface OrderItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  options: { name: string; priceModifier?: number }[] | null;
+  notes: string | null;
+}
+
 interface Order {
   id: string;
   customer_name: string;
@@ -60,6 +70,7 @@ interface Order {
     phone: string | null;
     city: string | null;
   };
+  order_items: OrderItem[];
 }
 
 export default function DriverDashboard() {
@@ -209,7 +220,8 @@ export default function DriverDashboard() {
         .select(`
           *,
           delivery_address:customer_addresses(street, number, neighborhood, city, state, complement, reference, zip_code),
-          company:companies(name, address, phone, city)
+          company:companies(name, address, phone, city),
+          order_items(id, product_name, quantity, unit_price, total_price, options, notes)
         `)
         .eq('delivery_driver_id', driverData.id)
         .in('status', ['awaiting_driver', 'ready', 'out_for_delivery'])
@@ -221,6 +233,7 @@ export default function DriverDashboard() {
         ...order,
         delivery_address: order.delivery_address as Order['delivery_address'],
         company: order.company as Order['company'],
+        order_items: (order.order_items || []) as OrderItem[],
       })) || []);
 
     } catch (error) {
@@ -577,6 +590,41 @@ export default function DriverDashboard() {
                         <Navigation className="h-4 w-4 mr-2" />
                         Abrir no Google Maps
                       </Button>
+                    </div>
+                  )}
+
+                  {/* Order Items */}
+                  {order.order_items && order.order_items.length > 0 && (
+                    <div className="p-3 bg-primary/5 border border-primary/10 rounded-lg">
+                      <p className="font-medium text-sm mb-2 flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Itens do Pedido
+                      </p>
+                      <div className="space-y-2">
+                        {order.order_items.map((item) => {
+                          const options = Array.isArray(item.options) ? item.options : [];
+                          return (
+                            <div key={item.id} className="text-sm pb-2 border-b border-border/50 last:border-0 last:pb-0">
+                              <div className="flex justify-between">
+                                <span>
+                                  <span className="font-medium">{item.quantity}x</span> {item.product_name}
+                                </span>
+                                <span className="text-muted-foreground">{formatCurrency(item.total_price)}</span>
+                              </div>
+                              {options.length > 0 && (
+                                <p className="text-xs text-muted-foreground ml-4">
+                                  + {options.map((o) => o.name).join(', ')}
+                                </p>
+                              )}
+                              {item.notes && (
+                                <p className="text-xs text-orange-600 dark:text-orange-400 ml-4 italic">
+                                  Obs: {item.notes}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
