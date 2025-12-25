@@ -6,7 +6,6 @@ import {
   ChefHat,
   Truck,
   XCircle,
-  Eye,
   Loader2,
   Phone,
   MapPin,
@@ -16,20 +15,13 @@ import {
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +29,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionAlert } from '@/components/SubscriptionAlert';
+import { PrintReceipt } from '@/components/orders/PrintReceipt';
 import { Database } from '@/integrations/supabase/types';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -89,6 +82,8 @@ interface Order {
   total: number;
   notes: string | null;
   delivery_driver_id: string | null;
+  needs_change?: boolean;
+  change_for?: number | null;
   order_items?: OrderItem[];
   customer_addresses?: DeliveryAddress;
   delivery_driver?: DeliveryDriver;
@@ -120,6 +115,7 @@ export default function OrdersManagement() {
   const { status: subscriptionStatus } = useSubscriptionStatus();
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>('Loja');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -198,7 +194,7 @@ export default function OrdersManagement() {
     try {
       const { data: company, error: companyError } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', user.id)
         .maybeSingle();
 
@@ -209,6 +205,7 @@ export default function OrdersManagement() {
       }
 
       setCompanyId(company.id);
+      setCompanyName(company.name || 'Loja');
 
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
@@ -494,9 +491,14 @@ export default function OrdersManagement() {
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display">
-              Pedido #{selectedOrder?.id.slice(0, 8)}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="font-display">
+                Pedido #{selectedOrder?.id.slice(0, 8)}
+              </DialogTitle>
+              {selectedOrder && (
+                <PrintReceipt order={selectedOrder} companyName={companyName} />
+              )}
+            </div>
           </DialogHeader>
 
           {selectedOrder && (
