@@ -197,20 +197,32 @@ export default function DriverDashboard() {
     if (!user) return;
 
     try {
+      setLoading(true);
+      
+      // Get first active driver for this user
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (driverError) throw driverError;
+      if (driverError) {
+        console.error('Driver fetch error:', driverError);
+        throw driverError;
+      }
+      
       if (!driverData) {
-        toast.error('Você não está cadastrado como entregador');
-        navigate('/dashboard');
+        console.log('No active driver found for user:', user.id);
+        toast.error('Você não está cadastrado como entregador ativo');
+        await signOut();
+        navigate('/driver/login');
         return;
       }
 
+      console.log('Driver loaded:', driverData);
       setDriver(driverData);
       driverIdRef.current = driverData.id;
 
@@ -227,7 +239,10 @@ export default function DriverDashboard() {
         .in('status', ['awaiting_driver', 'ready', 'out_for_delivery'])
         .order('created_at', { ascending: true });
 
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('Orders fetch error:', ordersError);
+        throw ordersError;
+      }
 
       setOrders(ordersData?.map(order => ({
         ...order,
@@ -238,11 +253,11 @@ export default function DriverDashboard() {
 
     } catch (error) {
       console.error('Error loading driver data:', error);
-      toast.error('Erro ao carregar dados');
+      toast.error('Erro ao carregar dados. Tente novamente.');
     } finally {
       setLoading(false);
     }
-  }, [user, navigate]);
+  }, [user, navigate, signOut]);
 
   const toggleAvailability = async () => {
     if (!driver) return;
@@ -376,46 +391,45 @@ export default function DriverDashboard() {
     );
   }
 
-  // Show location required screen if location is not granted
-  if (locationStatus === 'denied' || locationStatus === 'unavailable') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader className="text-center">
-            <MapPinOff className="h-16 w-16 mx-auto text-destructive mb-4" />
-            <CardTitle className="text-xl">Localização Necessária</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-muted-foreground">
-              {locationStatus === 'denied' 
-                ? 'Você precisa permitir o acesso à sua localização para usar o painel de entregas. Por favor, ative a permissão nas configurações do seu navegador.'
-                : 'Seu navegador não suporta geolocalização. Use um navegador moderno para acessar o painel de entregas.'
-              }
-            </p>
-            <div className="flex flex-col gap-2">
-              <Button onClick={() => {
-                setLocationStatus('pending');
-                startLocationTracking();
-              }}>
-                <Navigation className="h-4 w-4 mr-2" />
-                Tentar Novamente
-              </Button>
-              <Button
+  // Show location warning as a dismissible card instead of blocking the whole UI
+  const LocationWarning = () => {
+    if (locationStatus === 'denied' || locationStatus === 'unavailable') {
+      return (
+        <Card className="border-destructive bg-destructive/10">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <MapPinOff className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-destructive">
+                  {locationStatus === 'denied' 
+                    ? 'Localização bloqueada' 
+                    : 'Localização indisponível'
+                  }
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {locationStatus === 'denied' 
+                    ? 'Ative a permissão de localização nas configurações do navegador para rastreamento em tempo real.'
+                    : 'Seu navegador não suporta geolocalização.'
+                  }
+                </p>
+              </div>
+              <Button 
+                size="sm" 
                 variant="outline"
-                onClick={async () => {
-                  await signOut();
-                  navigate('/driver/login');
+                onClick={() => {
+                  setLocationStatus('pending');
+                  startLocationTracking();
                 }}
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sair
+                Tentar
               </Button>
             </div>
           </CardContent>
         </Card>
-      </div>
-    );
-  }
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -453,6 +467,9 @@ export default function DriverDashboard() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Location Warning */}
+        <LocationWarning />
+        
         {/* Controls */}
         <Card>
           <CardContent className="py-4 space-y-4">
