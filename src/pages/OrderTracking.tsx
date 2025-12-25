@@ -347,12 +347,30 @@ export default function OrderTracking() {
             )}
 
             {order.estimated_delivery_time && !isCancelled && order.status !== 'delivered' && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4 pt-4 border-t">
-                <Clock className="h-4 w-4" />
-                <span>
-                  Previsão de entrega:{' '}
-                  {format(new Date(order.estimated_delivery_time), "HH:mm", { locale: ptBR })}
-                </span>
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-sm font-medium">Previsão de entrega</p>
+                      <p className="text-xs text-muted-foreground">
+                        {order.status === 'pending' || order.status === 'confirmed' 
+                          ? 'Preparação + entrega' 
+                          : order.status === 'preparing' 
+                            ? 'Finalizando preparo'
+                            : 'Saindo para entrega'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">
+                      {format(new Date(order.estimated_delivery_time), "HH:mm", { locale: ptBR })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      ~{Math.max(0, Math.round((new Date(order.estimated_delivery_time).getTime() - new Date().getTime()) / 60000))} min
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
