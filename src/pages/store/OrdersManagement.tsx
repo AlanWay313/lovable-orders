@@ -11,6 +11,9 @@ import {
   MapPin,
   RefreshCw,
   Bell,
+  UserPlus,
+  Users,
+  AlertTriangle,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -267,10 +270,56 @@ export default function OrdersManagement() {
 
       // Reload orders to get updated data
       loadCompanyAndOrders();
+      loadAvailableDrivers();
       setSelectedOrder(null);
     } catch (error: any) {
       toast({
         title: 'Erro ao atribuir entregador',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setAssigningDriver(false);
+    }
+  };
+
+  const reassignDriverToOrder = async (orderId: string, newDriverId: string) => {
+    if (!companyId) return;
+    
+    setAssigningDriver(true);
+    try {
+      // First, get current order to free up the previous driver
+      const order = orders.find(o => o.id === orderId);
+      if (order?.delivery_driver_id) {
+        // Free up previous driver
+        await supabase
+          .from('delivery_drivers')
+          .update({ 
+            driver_status: 'available',
+            is_available: true
+          })
+          .eq('id', order.delivery_driver_id);
+      }
+
+      // Assign new driver using the edge function
+      const { data, error } = await supabase.functions.invoke('assign-driver', {
+        body: { orderId, driverId: newDriverId, companyId }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Entregador reatribuído',
+        description: data.driverName ? `${data.driverName} foi atribuído ao pedido` : 'Entregador reatribuído com sucesso',
+      });
+
+      // Reload data
+      loadCompanyAndOrders();
+      loadAvailableDrivers();
+      setSelectedOrder(null);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao reatribuir entregador',
         description: error.message,
         variant: 'destructive',
       });
@@ -584,6 +633,115 @@ export default function OrdersManagement() {
                     <p className="text-sm text-muted-foreground italic">
                       Ref: {selectedOrder.customer_addresses.reference}
                     </p>
+                  )}
+                </div>
+              )}
+
+              {/* Driver Assignment Section */}
+              {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+                    <Truck className="h-4 w-4" />
+                    Entregador
+                  </h4>
+                  
+                  {selectedOrder.delivery_driver_id ? (
+                    <div className="space-y-3">
+                      {/* Current driver info */}
+                      {(() => {
+                        const currentDriver = availableDrivers.find(d => d.id === selectedOrder.delivery_driver_id);
+                        return currentDriver ? (
+                          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                            <div>
+                              <p className="font-medium">{currentDriver.driver_name || 'Entregador'}</p>
+                              {currentDriver.driver_phone && (
+                                <p className="text-sm text-muted-foreground">{currentDriver.driver_phone}</p>
+                              )}
+                              <Badge variant={
+                                currentDriver.driver_status === 'in_delivery' ? 'default' :
+                                currentDriver.driver_status === 'pending_acceptance' ? 'secondary' :
+                                'outline'
+                              } className="mt-1">
+                                {currentDriver.driver_status === 'in_delivery' ? 'Em entrega' :
+                                 currentDriver.driver_status === 'pending_acceptance' ? 'Aguardando aceite' :
+                                 currentDriver.driver_status === 'available' ? 'Disponível' : 
+                                 currentDriver.driver_status || 'Offline'}
+                              </Badge>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-muted rounded-lg">
+                            <p className="text-sm text-muted-foreground">Entregador atribuído</p>
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Show reassign option for awaiting_driver status */}
+                      {selectedOrder.status === 'awaiting_driver' && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-amber-600">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>Entregador ainda não aceitou</span>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Reatribuir para outro entregador:</p>
+                            <div className="grid gap-2">
+                              {availableDrivers
+                                .filter(d => d.id !== selectedOrder.delivery_driver_id && d.is_available && d.driver_status === 'available')
+                                .map((driver) => (
+                                  <Button
+                                    key={driver.id}
+                                    variant="outline"
+                                    size="sm"
+                                    className="justify-start"
+                                    onClick={() => reassignDriverToOrder(selectedOrder.id, driver.id)}
+                                    disabled={assigningDriver}
+                                  >
+                                    {assigningDriver ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Users className="h-4 w-4 mr-2" />
+                                    )}
+                                    {driver.driver_name || 'Entregador'}
+                                  </Button>
+                                ))}
+                              {availableDrivers.filter(d => d.id !== selectedOrder.delivery_driver_id && d.is_available && d.driver_status === 'available').length === 0 && (
+                                <p className="text-sm text-muted-foreground">Nenhum outro entregador disponível</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Nenhum entregador atribuído</p>
+                      {availableDrivers.filter(d => d.is_available && d.driver_status === 'available').length > 0 ? (
+                        <div className="grid gap-2">
+                          {availableDrivers
+                            .filter(d => d.is_available && d.driver_status === 'available')
+                            .map((driver) => (
+                              <Button
+                                key={driver.id}
+                                variant="outline"
+                                size="sm"
+                                className="justify-start"
+                                onClick={() => assignDriverToOrder(selectedOrder.id, driver.id)}
+                                disabled={assigningDriver}
+                              >
+                                {assigningDriver ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <UserPlus className="h-4 w-4 mr-2" />
+                                )}
+                                {driver.driver_name || 'Entregador'}
+                              </Button>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-amber-600">Nenhum entregador disponível no momento</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
