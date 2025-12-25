@@ -59,11 +59,7 @@ serve(async (req) => {
       throw new Error(`Invalid plan: ${planKey}`);
     }
     
-    if (!plan.stripe_price_id) {
-      throw new Error(`Plan ${planKey} does not have a Stripe price configured`);
-    }
-
-    logStep("Plan selected", { planKey, priceId: plan.stripe_price_id, price: plan.price });
+    logStep("Plan selected", { planKey, price: plan.price, name: plan.name });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -91,9 +87,25 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "http://localhost:5173";
 
+    // Convert price to cents (Stripe uses smallest currency unit)
+    const priceInCents = Math.round(plan.price * 100);
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
+      line_items: [{
+        price_data: {
+          currency: 'brl',
+          product_data: {
+            name: plan.name,
+            description: plan.description || `Plano ${plan.name} - até ${plan.order_limit} pedidos/mês`,
+          },
+          unit_amount: priceInCents,
+          recurring: {
+            interval: 'month',
+          },
+        },
+        quantity: 1,
+      }],
       mode: "subscription",
       payment_method_types: ["card"],
       success_url: `${origin}/dashboard/plans?subscription=success`,
