@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
 import { SubscriptionAlert } from '@/components/SubscriptionAlert';
+import { StoreOnboarding } from '@/components/onboarding/StoreOnboarding';
 import {
   AreaChart,
   Area,
@@ -489,6 +490,11 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Onboarding Checklist */}
+        {user && (
+          <StoreOnboarding companyId={companyId} userId={user.id} />
+        )}
 
         {/* Subscription Alert */}
         {subscriptionStatus && (subscriptionStatus.isNearLimit || subscriptionStatus.isAtLimit) && (
