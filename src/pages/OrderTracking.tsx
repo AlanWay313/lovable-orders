@@ -23,6 +23,16 @@ import { toast } from 'sonner';
 import DeliveryMap from '@/components/map/DeliveryMap';
 import { PushNotificationButton } from '@/components/PushNotificationButton';
 
+interface OrderItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  options: unknown;
+  notes: string | null;
+}
+
 interface Order {
   id: string;
   customer_name: string;
@@ -41,27 +51,21 @@ interface Order {
     primary_color: string | null;
     address: string | null;
   };
-  items: {
-    id: string;
-    product_name: string;
-    quantity: number;
-    unit_price: number;
-    total_price: number;
-  }[];
+  items: OrderItem[];
 }
 
-const statusConfig: Record<string, { label: string; icon: typeof Package; color: string; step: number }> = {
-  pending: { label: 'Aguardando confirmação', icon: Clock, color: '#eab308', step: 0 },
-  confirmed: { label: 'Pedido confirmado', icon: CheckCircle, color: '#3b82f6', step: 1 },
-  preparing: { label: 'Em preparação', icon: ChefHat, color: '#f97316', step: 2 },
-  ready: { label: 'Pronto para entrega', icon: Package, color: '#a855f7', step: 3 },
-  awaiting_driver: { label: 'Aguardando entregador', icon: Truck, color: '#8b5cf6', step: 3.5 },
-  out_for_delivery: { label: 'Saiu para entrega', icon: Truck, color: '#06b6d4', step: 4 },
-  delivered: { label: 'Entregue', icon: CircleCheck, color: '#22c55e', step: 5 },
-  cancelled: { label: 'Cancelado', icon: XCircle, color: '#ef4444', step: -1 },
+const statusConfig: Record<string, { label: string; shortLabel: string; icon: typeof Package; color: string; step: number }> = {
+  pending: { label: 'Aguardando confirmação', shortLabel: 'Aguardando', icon: Clock, color: '#eab308', step: 0 },
+  confirmed: { label: 'Pedido confirmado', shortLabel: 'Confirmado', icon: CheckCircle, color: '#3b82f6', step: 1 },
+  preparing: { label: 'Em preparação', shortLabel: 'Preparando', icon: ChefHat, color: '#f97316', step: 2 },
+  ready: { label: 'Pronto para entrega', shortLabel: 'Pronto', icon: Package, color: '#a855f7', step: 3 },
+  awaiting_driver: { label: 'Aguardando entregador', shortLabel: 'Aguard. Entreg.', icon: Truck, color: '#8b5cf6', step: 3.5 },
+  out_for_delivery: { label: 'Saiu para entrega', shortLabel: 'Em Entrega', icon: Truck, color: '#06b6d4', step: 4 },
+  delivered: { label: 'Entregue', shortLabel: 'Entregue', icon: CircleCheck, color: '#22c55e', step: 5 },
+  cancelled: { label: 'Cancelado', shortLabel: 'Cancelado', icon: XCircle, color: '#ef4444', step: -1 },
 };
 
-const statusSteps = ['pending', 'confirmed', 'preparing', 'ready', 'awaiting_driver', 'out_for_delivery', 'delivered'];
+const statusSteps = ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'];
 
 // Notification sound URL
 const NOTIFICATION_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
@@ -298,34 +302,36 @@ export default function OrderTracking() {
                 <div className="relative flex items-center justify-between">
                   {statusSteps.map((step, index) => {
                     const stepConfig = statusConfig[step];
-                    const isCompleted = currentStatus.step >= stepConfig.step;
-                    const isCurrent = order.status === step;
+                    const currentStep = statusConfig[order.status]?.step ?? 0;
+                    const isCompleted = currentStep >= stepConfig.step;
+                    const isCurrent = order.status === step || 
+                      (order.status === 'awaiting_driver' && step === 'ready');
 
                     return (
-                      <div key={step} className="flex flex-col items-center relative z-10">
+                      <div key={step} className="flex flex-col items-center relative z-10 flex-1">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                          className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all ${
                             isCompleted
                               ? 'bg-primary text-primary-foreground'
                               : 'bg-muted text-muted-foreground'
                           } ${isCurrent ? 'ring-4 ring-primary/20' : ''}`}
                         >
-                          <stepConfig.icon className="h-5 w-5" />
+                          <stepConfig.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
-                        <span className={`text-xs mt-2 text-center max-w-[60px] ${
+                        <span className={`text-[10px] sm:text-xs mt-2 text-center leading-tight ${
                           isCompleted ? 'text-foreground font-medium' : 'text-muted-foreground'
                         }`}>
-                          {stepConfig.label.split(' ')[0]}
+                          {stepConfig.shortLabel}
                         </span>
                       </div>
                     );
                   })}
                   {/* Progress Line */}
-                  <div className="absolute top-5 left-5 right-5 h-0.5 bg-muted -z-0">
+                  <div className="absolute top-4 sm:top-5 left-[8%] right-[8%] h-0.5 bg-muted -z-0">
                     <div
                       className="h-full bg-primary transition-all duration-500"
                       style={{
-                        width: `${(currentStatus.step / (statusSteps.length - 1)) * 100}%`,
+                        width: `${Math.min((statusConfig[order.status]?.step ?? 0) / (statusSteps.length - 1) * 100, 100)}%`,
                       }}
                     />
                   </div>
@@ -376,19 +382,42 @@ export default function OrderTracking() {
             <CardTitle className="text-lg">Detalhes do Pedido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex justify-between">
-                  <div>
-                    <span className="font-medium">{item.quantity}x</span>{' '}
-                    {item.product_name}
-                  </div>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(item.total_price)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {order.items.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">
+                Carregando itens...
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {order.items.map((item) => {
+                  const options = Array.isArray(item.options) 
+                    ? (item.options as { name: string; priceModifier?: number }[]) 
+                    : [];
+                  return (
+                    <div key={item.id} className="pb-3 border-b border-border last:border-0 last:pb-0">
+                      <div className="flex justify-between">
+                        <div className="flex-1">
+                          <span className="font-medium">{item.quantity}x</span>{' '}
+                          <span className="font-medium">{item.product_name}</span>
+                        </div>
+                        <span className="font-medium">
+                          {formatCurrency(item.total_price)}
+                        </span>
+                      </div>
+                      {options.length > 0 && (
+                        <p className="text-sm text-muted-foreground mt-1 ml-6">
+                          + {options.map((o) => o.name).join(', ')}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-sm text-muted-foreground mt-1 ml-6 italic">
+                          Obs: {item.notes}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <Separator />
 
