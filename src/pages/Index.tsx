@@ -197,7 +197,7 @@ export default function Index() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-glow">
               <Store className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-bold">MenuPro</span>
+            <span className="font-display text-xl font-bold">CardpOn</span>
           </Link>
           
           <nav className="hidden md:flex items-center gap-8">
@@ -587,7 +587,7 @@ export default function Index() {
             Pronto para começar?
           </h2>
           <p className="text-white/80 max-w-xl mx-auto mb-8 text-lg">
-            Junte-se a centenas de restaurantes que já usam o MenuPro para aumentar suas vendas
+            Junte-se a centenas de negócios que já usam o CardpOn para aumentar suas vendas
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" variant="secondary" asChild className="h-12 px-8">
@@ -611,7 +611,7 @@ export default function Index() {
               <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center">
                 <Store className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-display font-bold text-lg">MenuPro</span>
+              <span className="font-display font-bold text-lg">CardpOn</span>
             </div>
 
             <nav className="flex items-center gap-6">
@@ -627,7 +627,7 @@ export default function Index() {
             </nav>
 
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} MenuPro. Todos os direitos reservados.
+              © {new Date().getFullYear()} CardpOn. Todos os direitos reservados.
             </p>
           </div>
         </div>

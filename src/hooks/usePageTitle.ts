@@ -22,7 +22,7 @@ export function usePageTitle(customTitle?: string) {
   const location = useLocation();
 
   useEffect(() => {
-    const baseTitle = 'DeliveryApp';
+    const baseTitle = 'CardpOn';
     
     if (customTitle) {
       document.title = `${customTitle} | ${baseTitle}`;
