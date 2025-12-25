@@ -170,16 +170,26 @@ export default function PlansPage() {
         },
       });
 
-      if (response.error) throw new Error(response.error.message);
+      if (response.error) {
+        console.error('Subscription error:', response.error);
+        throw new Error(response.error.message || 'Erro ao processar assinatura');
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
 
       const { url } = response.data;
       if (url) {
         window.location.href = url;
+      } else {
+        throw new Error('URL de checkout não retornada');
       }
     } catch (error: any) {
+      console.error('Full error:', error);
       toast({
         title: 'Erro ao iniciar assinatura',
-        description: error.message,
+        description: error.message || 'Erro desconhecido',
         variant: 'destructive',
       });
     } finally {
