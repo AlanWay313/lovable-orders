@@ -19,6 +19,7 @@ import OrdersManagement from "./pages/store/OrdersManagement";
 import DriversManagement from "./pages/store/DriversManagement";
 import CouponsManagement from "./pages/store/CouponsManagement";
 import PromotionsManagement from "./pages/store/PromotionsManagement";
+import ReviewsManagement from "./pages/store/ReviewsManagement";
 import UserSettings from "./pages/store/UserSettings";
 import PlansPage from "./pages/store/PlansPage";
 import OrderTracking from "./pages/OrderTracking";
@@ -96,6 +97,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <PromotionsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/reviews"
+              element={
+                <ProtectedRoute>
+                  <ReviewsManagement />
                 </ProtectedRoute>
               }
             />

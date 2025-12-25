@@ -16,6 +16,7 @@ import {
   Tag,
   Sliders,
   ScrollText,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
   { label: "Entregadores", href: "/dashboard/drivers", icon: Truck, roles: ["store_owner"] },
   { label: "Promoções", href: "/dashboard/promotions", icon: Tag, roles: ["store_owner"] },
   { label: "Cupons", href: "/dashboard/coupons", icon: Ticket, roles: ["store_owner"] },
+  { label: "Avaliações", href: "/dashboard/reviews", icon: Star, roles: ["store_owner"] },
   { label: "Planos", href: "/dashboard/plans", icon: Crown, roles: ["store_owner"] },
   { label: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
