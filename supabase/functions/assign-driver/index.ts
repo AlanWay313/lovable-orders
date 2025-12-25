@@ -15,7 +15,34 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // Admin client (bypasses RLS) for writes
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Authenticated client (uses caller JWT) for identity
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseAuthed = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData, error: userError } = await supabaseAuthed.auth.getUser();
+    if (userError || !userData?.user) {
+      console.error('Auth getUser error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = userData.user.id;
 
     const { orderId, driverId, companyId } = await req.json();
 
@@ -26,13 +53,76 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Assigning order ${orderId} to driver ${driverId}`);
+    // Authorization: only the company owner (or super admin) can assign/reassign drivers
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('owner_id')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    if (companyError) {
+      console.error('Error loading company:', companyError);
+      throw companyError;
+    }
+    if (!company) {
+      return new Response(
+        JSON.stringify({ error: 'Company not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let isAllowed = company.owner_id === userId;
+    if (!isAllowed) {
+      const { data: adminRole, error: roleError } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('role', 'super_admin')
+        .maybeSingle();
+
+      if (roleError) {
+        console.error('Error checking role:', roleError);
+        throw roleError;
+      }
+
+      isAllowed = !!adminRole;
+    }
+
+    if (!isAllowed) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate driver belongs to company
+    const { data: driverCheck, error: driverCheckError } = await supabase
+      .from('delivery_drivers')
+      .select('id')
+      .eq('id', driverId)
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (driverCheckError) {
+      console.error('Error validating driver:', driverCheckError);
+      throw driverCheckError;
+    }
+
+    if (!driverCheck) {
+      return new Response(
+        JSON.stringify({ error: 'Driver not found for this company' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Assigning order ${orderId} to driver ${driverId} (company ${companyId}) by user ${userId}`);
 
     // Update order with driver assignment - status becomes awaiting_driver
     // Driver needs to accept before starting delivery
     const { error: orderError } = await supabase
       .from('orders')
-      .update({ 
+      .update({
         delivery_driver_id: driverId,
         status: 'awaiting_driver'
       })
@@ -47,7 +137,7 @@ serve(async (req) => {
     // Update driver status - mark as pending (waiting for driver to accept)
     const { error: driverError } = await supabase
       .from('delivery_drivers')
-      .update({ 
+      .update({
         driver_status: 'pending_acceptance',
         is_available: false
       })
@@ -79,13 +169,8 @@ serve(async (req) => {
 
       // Try to send push notification
       try {
-        await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
             userId: driver.user_id,
             userType: 'driver',
             payload: {
@@ -94,7 +179,7 @@ serve(async (req) => {
               tag: `order-${orderId}`,
               data: { type: 'new_delivery', orderId, companyId }
             }
-          }),
+          }
         });
       } catch (pushError) {
         console.error('Error sending push notification:', pushError);
@@ -103,10 +188,10 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: 'Driver assigned successfully',
-        driverName: driver?.driver_name 
+        driverName: driver?.driver_name
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
