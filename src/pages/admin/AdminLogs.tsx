@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -124,6 +125,7 @@ export default function AdminLogs() {
   const infoCount = logs?.filter(l => l.level === "info").length || 0;
 
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Logs do Sistema</h1>
@@ -286,5 +288,6 @@ export default function AdminLogs() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }
